@@ -98,6 +98,10 @@ def start(payload):
         "--ipc=private",
         "--shm-size=16g",
         "--device=/dev/kfd",
+        # Rootless Docker's synthetic sysfs can omit KFD/DRM/PCI topology.
+        # This is metadata only; DRM devices and the KFD allowlist stay selected.
+        "--mount",
+        "type=bind,source=/sys,target=/sys,readonly",
     ]
     if c.get("numa_interleave", False):
         command += ["--cap-add=SYS_NICE"]

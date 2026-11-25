@@ -87,6 +87,8 @@ def test_four_isolates_selected_kfd_drm_and_ray(monkeypatch, tmp_path):
         "--device=/dev/kfd",
         *["--device=" + r["render_node"] for r in rows],
     }
+    assert "type=bind,source=/sys,target=/sys,readonly" in cmd
+    assert "--privileged" not in cmd
     assert "HIP_VISIBLE_DEVICES=0,1,2,3" in cmd
     assert "RLK_ALLOWED_KFD_GPU_IDS=100,101,102,103" in cmd
     assert [r["role"] for r in receipt["allocation"]] == ["actor", "actor", "rollout", "rollout"]

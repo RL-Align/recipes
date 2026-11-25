@@ -78,7 +78,7 @@ result does not validate a newly assembled image or the four-node run.
 
 - Linux with a compatible ROCm driver, Docker, Git, Python 3.10+ and `rocm-smi`.
 - Four idle selected GPUs for `single-node-4gpu` (default physical IDs 4–7), or eight idle GPUs 0–7 for the 8-/32-GPU configurations. Use the same architecture across nodes.
-- Four GPUs provide **four-card functional validation** only; they do not validate eight-card DP2 or four-node execution. Ordered `nodes[].gpus` assigns the first half to actor and the second half to rollout. Only selected DRM devices and KFD GPU IDs are exposed, then actual worker PCI identities are independently verified.
+- Four GPUs provide **four-card functional validation** only; they do not validate eight-card DP2 or four-node execution. Ordered `nodes[].gpus` assigns the first half to actor and the second half to rollout. Only selected DRM devices and KFD GPU IDs are exposed, then actual worker PCI identities are independently verified. The launcher bind-mounts host `/sys` read-only because rootless Docker can otherwise omit ROCm topology metadata; it does not enable privileged mode or expose additional GPU device nodes.
 - For four nodes: noninteractive SSH from the first node and the same shared
   filesystem mounted at `work_dir` on every node.
 - Reachable node IPs and the cluster's Ray/RCCL network access. Enable RDMA only

@@ -219,23 +219,29 @@ def operate(c, output, verify_only=False):
             # Track before start: a later probe failure still cleans up this run.
             started.append(payload)
             write_json(output / f"container-{payload['node']['name']}.json", node_action("start", payload))
-            probe = remote(
-                payload["node"],
-                [
-                    "docker",
-                    "exec",
-                    payload["container"],
-                    PYTHON,
-                    "/opt/recipes/scripts/runtime.py",
-                    "probe",
-                    "--config",
-                    output / "site.json",
-                    "--output",
-                    output,
-                ],
-                text=True,
-                capture_output=True,
-            )
+            try:
+                probe = remote(
+                    payload["node"],
+                    [
+                        "docker",
+                        "exec",
+                        payload["container"],
+                        PYTHON,
+                        "/opt/recipes/scripts/runtime.py",
+                        "probe",
+                        "--config",
+                        output / "site.json",
+                        "--output",
+                        output,
+                    ],
+                    text=True,
+                    capture_output=True,
+                )
+            except subprocess.CalledProcessError as error:
+                (output / f"probe-{payload['node']['name']}.log").write_text(
+                    (error.stdout or "") + (error.stderr or "")
+                )
+                raise
             (output / f"probe-{payload['node']['name']}.log").write_text(probe.stdout + probe.stderr)
             markers = [line for line in probe.stdout.splitlines() if line.startswith("RUNTIME_PROBE=")]
             if len(markers) != 1:
