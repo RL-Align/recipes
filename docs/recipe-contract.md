@@ -25,7 +25,7 @@ not weights, caches, private hostnames, raw traces, images or credentials.
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install pytest hydra-core numpy ruff==0.12.2
+.venv/bin/pip install pytest hydra-core numpy ray ruff==0.12.2
 .venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu
 python3 scripts/sources.py --output /tmp/dsv4-recipe-sources-NEW
 RLK_RECIPE_TEST_SOURCE=/tmp/dsv4-recipe-sources-NEW .venv/bin/pytest -q
