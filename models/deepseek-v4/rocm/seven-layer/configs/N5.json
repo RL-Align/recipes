@@ -10,16 +10,6 @@
     5,
     6
   ],
-  "physical_reservation": [
-    0,
-    1,
-    2,
-    3,
-    4,
-    5,
-    6,
-    7
-  ],
   "actor": {
     "pp": 2,
     "tp": 1,
@@ -64,5 +54,6 @@
   },
   "acceptance": "Full fixed-weight bit parity, then 3 effective GRPO updates with post-v3 validation; startup is insufficient",
   "execution_gate": "N1-N4 complete fixed-weight and three-update independent verification first",
-  "purpose": "Expert partition/synchronization extension; not a DP performance test"
+  "purpose": "Expert partition/synchronization extension; not a DP performance test",
+  "physical_gpu_selection": "explicit executor pool; each phase uses only its actual rank count"
 }

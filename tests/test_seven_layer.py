@@ -67,3 +67,34 @@ def test_no_duplicate_dp_replica_or_added_actor_rollout_card_counts():
     assert all(p["actor"]["tp"] == p["actor"]["etp"] == 1 for p in targets)
     with pytest.raises(ValueError, match="must remain one"):
         matrix.profile("unsupported", 2, 2, 1, 1, 2)
+
+
+def test_selected_pool_ignores_only_unselected_tasks_and_rejects_selected_occupancy(monkeypatch):
+    watch = load("watch")
+    state = cards(occupied=True)
+    state["card0"]["VRAM Total Used Memory (B)"] = str(90 * 1024**3)
+    state["card0"]["GPU use (%)"] = "90"
+    mapping = "PID 123 is using 1 DRM device(s):\n0\n"
+
+    def run(argv):
+        if "--json" in argv:
+            return json.dumps(state)
+        if "--showpidgpus" in argv:
+            return mapping
+        return "123 1 root startup python workload.py"
+
+    monkeypatch.setattr(watch, "run", run)
+    assert watch.snapshot([4, 5, 6, 7])["idle"] is True
+    assert watch.snapshot()["idle"] is False
+    mapping = "PID 123 is using 2 DRM device(s):\n0 5\n"
+    assert watch.snapshot([4, 5, 6, 7])["idle"] is False
+    mapping = "PID 123 is using 1 DRM device(s):\n0\n"
+    state["card6"]["VRAM Total Used Memory (B)"] = str(2 * 1024**3)
+    assert watch.snapshot([4, 5, 6, 7])["idle"] is False
+    state["card6"]["VRAM Total Used Memory (B)"] = "300000000"
+    state["card7"]["GPU use (%)"] = "1"
+    assert watch.snapshot([4, 5, 6, 7])["idle"] is False
+    with pytest.raises(RuntimeError, match="mapping"):
+        watch.selected_occupants("PID 123 is using 2 DRM device(s):\n0\n", [4, 5, 6, 7])
+    with pytest.raises(ValueError, match="unique"):
+        watch.snapshot([4, 4])

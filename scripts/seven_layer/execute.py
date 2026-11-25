@@ -34,13 +34,13 @@ def write(path, value):
     pending.replace(path)
 
 
-def wait_idle(root):
+def wait_idle(root, gpus):
     while True:
         try:
-            sample = snapshot()
+            sample = snapshot(gpus)
             with (root / "gpu-samples.jsonl").open("a") as f:
                 f.write(json.dumps(sample) + "\n")
-            idle(list(range(8)))
+            idle(gpus)
             return
         except (RuntimeError, subprocess.CalledProcessError) as e:
             write(
@@ -125,9 +125,12 @@ def launch(
     checkpoint=None,
 ):
     out.mkdir(parents=True, exist_ok=False)
-    wait_idle(run)
     role = "actor" if action.startswith("actor") else "rollout"
     active = rows[: profile[role]["gpus"]]
+    gpus = [r["physical_gpu"] for r in active]
+    if len(active) != profile[role]["gpus"]:
+        raise ValueError("selected physical GPU pool cannot satisfy unchanged target topology")
+    wait_idle(run, gpus)
     command = container_base(work, run, active, image, out)
     if role == "actor":
         command += ["-m", "torch.distributed.run", "--standalone", "--nproc_per_node=2"]
@@ -164,7 +167,7 @@ def launch(
     cid = subprocess.check_output(command, text=True).strip()
     write(out / "container.json", dict(container_id=cid, action=action, version=version, profile=profile))
     # Creating a container is not a reservation; guard again immediately at actual start.
-    wait_idle(run)
+    wait_idle(run, gpus)
     began = time.monotonic()
     with (out / "driver.log").open("w") as log:
         proc = subprocess.Popen(["docker", "start", "-a", cid], stdout=log, stderr=subprocess.STDOUT)
@@ -180,7 +183,7 @@ def launch(
                     subprocess.run(["docker", "stop", "--time", "30", cid], check=True)
                 raise TimeoutError("own phase exceeded two-hour timeout; retained logs and checkpoints")
             if int(elapsed) % 30 == 0:
-                sample = snapshot()
+                sample = snapshot(gpus)
                 with (run / "gpu-samples.jsonl").open("a") as f:
                     f.write(json.dumps(sample) + "\n")
         code = proc.returncode
@@ -191,7 +194,9 @@ def launch(
         returncode=code,
         seconds=time.monotonic() - began,
         active_gpus=len(active),
-        reserved_gpus=8,
+        selected_physical_gpus=gpus,
+        selected_pool_gpus=len(rows),
+        machine_gpus=8,
         status="EXECUTED" if code == 0 else "FAIL",
     )
     write(out / "execution.json", record)
@@ -384,7 +389,15 @@ def training(work, run, rows, image, profile, initial_policy, dataset):
     return result
 
 
-def run(work, image):
+def run(work, image, gpus, groups, runtime_lock):
+    targets = {p["id"]: p for p in profiles()[:4]}
+    if not groups or len(set(groups)) != len(groups) or set(groups) - set(targets):
+        raise ValueError("select unique implemented primary groups N1..N4")
+    if not gpus or len(set(gpus)) != len(gpus) or any(g not in range(8) for g in gpus):
+        raise ValueError("select unique physical GPU ordinals in 0..7")
+    primary = [targets[name] for name in groups]
+    if any(p["peak_physical_gpus"] > len(gpus) for p in primary):
+        raise ValueError("physical pool too small; do not reduce target TP")
     runs = work / "runs-N"
     runs.mkdir(exist_ok=True)
     with (work / "execute-N.lock").open("a") as lock:
@@ -393,10 +406,9 @@ def run(work, image):
             datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid4().hex[:8]
         )
         run_root.mkdir()
-        wait_idle(run_root)
-        rows = allocation(list(range(8)))
+        rows = allocation(gpus)
         write(run_root / "allocation.json", rows)
-        runtime = json.loads((work / "runtime/runtime-N.lock.json").read_text())
+        runtime = json.loads(runtime_lock.read_text())
         if runtime["image_id"] != image:
             raise ValueError("runtime image lock differs")
         write(run_root / "provenance.json", dict(image_id=image, sources=runtime["sources"]))
@@ -404,9 +416,20 @@ def run(work, image):
             p["id"]: dict(status="NOT_RUN", fixed_weight="NOT_RUN", updates=0, target_load="NOT_RUN")
             for p in profiles()
         }
+        for name in set(summary) - set(groups) - {"N5"}:
+            summary[name].update(status="DEFERRED", reason="not selected for this device pool")
+        write(
+            run_root / "resource-policy.json",
+            dict(
+                selected_physical_gpus=gpus,
+                selected_groups=groups,
+                machine_gpus=8,
+                local_lock_is_reservation=False,
+                phase_checks="actual active devices only",
+            ),
+        )
         write(run_root / "summary.json", summary)
         summarize(run_root)
-        primary = profiles()[:4]
         common = run_root / "common-fixed-actor"
         launch(work, run_root, rows, image, primary[0], "actor-score", common)
         initial_policy = common / "policy-v0.pt"
@@ -471,8 +494,11 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--work", type=Path, required=True)
     ap.add_argument("--image", required=True)
+    ap.add_argument("--gpus", nargs="+", type=int, required=True)
+    ap.add_argument("--groups", nargs="+", choices=["N1", "N2", "N3", "N4"], required=True)
+    ap.add_argument("--runtime-lock", type=Path, required=True)
     args = ap.parse_args()
-    run(args.work.resolve(), args.image)
+    run(args.work.resolve(), args.image, args.gpus, args.groups, args.runtime_lock.resolve())
 
 
 if __name__ == "__main__":

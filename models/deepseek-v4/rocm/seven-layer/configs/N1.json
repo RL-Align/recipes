@@ -10,16 +10,6 @@
     5,
     6
   ],
-  "physical_reservation": [
-    0,
-    1,
-    2,
-    3,
-    4,
-    5,
-    6,
-    7
-  ],
   "actor": {
     "pp": 2,
     "tp": 1,
@@ -62,5 +52,6 @@
     "prompt_cap": 1024,
     "response_cap": 7168
   },
-  "acceptance": "Full fixed-weight bit parity, then 3 effective GRPO updates with post-v3 validation; startup is insufficient"
+  "acceptance": "Full fixed-weight bit parity, then 3 effective GRPO updates with post-v3 validation; startup is insufficient",
+  "physical_gpu_selection": "explicit executor pool; each phase uses only its actual rank count"
 }
