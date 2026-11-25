@@ -1,0 +1,15 @@
+[
+  {
+    "rank": 0,
+    "tensor_parallel_rank": 0,
+    "tensor_parallel_size": 1,
+    "pipeline_stage": 0,
+    "node_id": "10",
+    "pid": 953,
+    "worker_identity": "10:953:223d115d9464449198bf8b3c1097b730",
+    "logical_gpu": 0,
+    "pci_bus_id": "0000:83:00.0",
+    "architecture": "gfx942:sramecc+:xnack-",
+    "device_name": "AMD Instinct MI300X VF"
+  }
+]

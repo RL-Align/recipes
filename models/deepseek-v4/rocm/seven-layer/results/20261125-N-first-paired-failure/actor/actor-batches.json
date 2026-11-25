@@ -1,0 +1,117 @@
+[
+  {
+    "batch_id": "single-3",
+    "samples": [
+      "boundary-3"
+    ],
+    "seconds": 21.32530541298911
+  },
+  {
+    "batch_id": "single-4",
+    "samples": [
+      "boundary-4"
+    ],
+    "seconds": 0.0904691549949348
+  },
+  {
+    "batch_id": "single-5",
+    "samples": [
+      "boundary-5"
+    ],
+    "seconds": 0.08407009998336434
+  },
+  {
+    "batch_id": "single-127",
+    "samples": [
+      "boundary-127"
+    ],
+    "seconds": 0.09871724713593721
+  },
+  {
+    "batch_id": "single-128",
+    "samples": [
+      "boundary-128"
+    ],
+    "seconds": 0.08928675996139646
+  },
+  {
+    "batch_id": "single-129",
+    "samples": [
+      "boundary-129"
+    ],
+    "seconds": 0.11662587709724903
+  },
+  {
+    "batch_id": "single-511",
+    "samples": [
+      "boundary-511"
+    ],
+    "seconds": 0.15162776224315166
+  },
+  {
+    "batch_id": "single-512",
+    "samples": [
+      "boundary-512"
+    ],
+    "seconds": 0.12340916879475117
+  },
+  {
+    "batch_id": "single-513",
+    "samples": [
+      "boundary-513"
+    ],
+    "seconds": 0.12662132224068046
+  },
+  {
+    "batch_id": "single-2047",
+    "samples": [
+      "boundary-2047"
+    ],
+    "seconds": 0.3917352412827313
+  },
+  {
+    "batch_id": "single-2048",
+    "samples": [
+      "boundary-2048"
+    ],
+    "seconds": 0.3349611898884177
+  },
+  {
+    "batch_id": "single-2049",
+    "samples": [
+      "boundary-2049"
+    ],
+    "seconds": 0.3291880409233272
+  },
+  {
+    "batch_id": "single-2177",
+    "samples": [
+      "boundary-2177"
+    ],
+    "seconds": 0.3572223852388561
+  },
+  {
+    "batch_id": "AB",
+    "samples": [
+      "AB-0",
+      "AB-1"
+    ],
+    "seconds": 0.8550233491696417
+  },
+  {
+    "batch_id": "BA",
+    "samples": [
+      "BA-0",
+      "BA-1"
+    ],
+    "seconds": 0.5881830272264779
+  },
+  {
+    "batch_id": "AB-repeat",
+    "samples": [
+      "AB-repeat-0",
+      "AB-repeat-1"
+    ],
+    "seconds": 0.606081675272435
+  }
+]

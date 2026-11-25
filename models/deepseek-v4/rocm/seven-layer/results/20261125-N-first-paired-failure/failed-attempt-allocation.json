@@ -1,0 +1,50 @@
+[
+  {
+    "physical_gpu": 0,
+    "pci_bus_id": "0000:83:00.0",
+    "render_node": "/dev/dri/renderD129",
+    "kfd_gpu_id": 21947
+  },
+  {
+    "physical_gpu": 1,
+    "pci_bus_id": "0000:8b:00.0",
+    "render_node": "/dev/dri/renderD137",
+    "kfd_gpu_id": 37820
+  },
+  {
+    "physical_gpu": 2,
+    "pci_bus_id": "0000:93:00.0",
+    "render_node": "/dev/dri/renderD145",
+    "kfd_gpu_id": 39350
+  },
+  {
+    "physical_gpu": 3,
+    "pci_bus_id": "0000:9b:00.0",
+    "render_node": "/dev/dri/renderD153",
+    "kfd_gpu_id": 24497
+  },
+  {
+    "physical_gpu": 4,
+    "pci_bus_id": "0000:a3:00.0",
+    "render_node": "/dev/dri/renderD161",
+    "kfd_gpu_id": 36258
+  },
+  {
+    "physical_gpu": 5,
+    "pci_bus_id": "0000:ab:00.0",
+    "render_node": "/dev/dri/renderD169",
+    "kfd_gpu_id": 19365
+  },
+  {
+    "physical_gpu": 6,
+    "pci_bus_id": "0000:b3:00.0",
+    "render_node": "/dev/dri/renderD177",
+    "kfd_gpu_id": 16815
+  },
+  {
+    "physical_gpu": 7,
+    "pci_bus_id": "0000:bb:00.0",
+    "render_node": "/dev/dri/renderD185",
+    "kfd_gpu_id": 34728
+  }
+]
