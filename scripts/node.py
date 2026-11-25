@@ -125,6 +125,9 @@ def start(payload):
     cache = Path(c["work_dir"]) / "cache" / node["name"]
     cache.mkdir(parents=True, exist_ok=True)
     mounts = [
+        # Native lossless failure captures use /outputs/trace-tensors.
+        # Bind it to this attempt so diagnostics survive container cleanup.
+        (str(output), "/outputs", "rw"),
         (c["work_dir"], c["work_dir"], "rw"),
         (c["model_dir"], c["model_dir"], "ro"),
         (c["baseline_data_dir"], c["baseline_data_dir"], "ro"),
