@@ -22,7 +22,8 @@ def fixture_config(topology="four-node-32gpu"):
 
 
 @pytest.mark.parametrize(
-    "topology,actor,replicas,total", [("single-node-8gpu", 4, 2, 8), ("four-node-32gpu", 16, 8, 32)]
+    "topology,actor,replicas,total",
+    [("single-node-4gpu", 2, 1, 4), ("single-node-8gpu", 4, 2, 8), ("four-node-32gpu", 16, 8, 32)],
 )
 def test_effective_workload(topology, actor, replicas, total):
     c = fixture_config(topology)
@@ -67,7 +68,7 @@ def test_math_load_and_reward_are_not_copy_smoke():
     assert "trainer.total_training_steps=200" in command
 
 
-@pytest.mark.parametrize("topology", ["single-node-8gpu", "four-node-32gpu"])
+@pytest.mark.parametrize("topology", ["single-node-4gpu", "single-node-8gpu", "four-node-32gpu"])
 @pytest.mark.parametrize("profile", ["smoke", "math-smoke", "math-200"])
 def test_native_hydra_and_trainer_contract(contracts, topology, profile):
     from hydra import compose, initialize_config_dir

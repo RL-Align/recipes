@@ -114,6 +114,33 @@ def gsm_row(row, index, split):
     )
 
 
+def native_prompt_builder(model, tokenizer):
+    """Use the same model-family encoder and default kwargs as native AgentLoop."""
+    from verl.utils.tokenizer.continuous_token_wiring import create_continuous_token_builder
+
+    model_type = json.loads((Path(model) / "config.json").read_text())["model_type"]
+    return create_continuous_token_builder(tokenizer, hf_model_type=model_type, chat_template_kwargs={})
+
+
+def pinned_dapo(c, pinned):
+    """Retain and verify the published parquet at its locked commit, without transforming rows."""
+    from datasets import Dataset
+    from huggingface_hub import get_hf_file_metadata, hf_hub_download, hf_hub_url
+
+    filename = "data/dapo-math-17k.parquet"
+    kwargs = dict(repo_id=pinned["repo"], filename=filename, repo_type="dataset", revision=pinned["revision"])
+    metadata = get_hf_file_metadata(hf_hub_url(**kwargs))
+    if metadata.commit_hash != pinned["revision"] or not re.fullmatch(r"[0-9a-f]{64}", metadata.etag):
+        raise ValueError("DAPO revision or LFS content digest differs from the locked public source")
+    path = Path(hf_hub_download(**kwargs, cache_dir=str(Path(c["work_dir"]) / "cache/huggingface-hub")))
+    digest = sha(path)
+    if digest != metadata.etag:
+        raise ValueError("downloaded DAPO parquet differs from its locked-revision LFS SHA256")
+    receipt = dict(file=filename, revision=metadata.commit_hash, bytes=path.stat().st_size, sha256=digest)
+    write_json(Path(c["work_dir"]) / "downloads/dapo-source.json", receipt)
+    return Dataset.from_parquet(str(path)), receipt
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
@@ -156,9 +183,7 @@ def main():
             train = Dataset.from_list([gsm_row(r, i, "train") for i, r in enumerate(raw["train"])])
             val = Dataset.from_list([gsm_row(r, i, "test") for i, r in enumerate(raw["test"])])
         else:
-            raw = load_dataset(
-                pinned["repo"], data_files="data/dapo-math-17k.parquet", revision=pinned["revision"]
-            )["train"]
+            raw, raw_receipt = pinned_dapo(c, pinned)
             # No invented answers or replacement reward for the DAPO source.
             for row in raw:
                 if (
@@ -173,15 +198,20 @@ def main():
         from transformers import AutoTokenizer
 
         tokenizer = AutoTokenizer.from_pretrained(model, local_files_only=True, trust_remote_code=False)
+        builder = native_prompt_builder(model, tokenizer)
         before = len(train)
         train = train.filter(
-            lambda r: (
-                len(tokenizer.apply_chat_template(r["prompt"], add_generation_prompt=True))
-                <= p["max_prompt_length"]
-            )
+            lambda r: len(builder.build_initial_tokens(r["prompt"])) <= p["max_prompt_length"]
         )
         source = dict(
             **pinned,
+            raw_parquet=raw_receipt if c["dataset"] == "dapo" else None,
+            prompt_encoding=dict(
+                builder=type(builder).__module__ + "." + type(builder).__name__,
+                model_type=json.loads((model / "config.json").read_text())["model_type"],
+                chat_template_kwargs={},
+                encoder_sha256=sha(Path(__import__("inspect").getfile(type(builder)))),
+            ),
             rows_before_length_filter=before,
             rows_after_length_filter=len(train),
             validation="first 128 held-out DAPO rows or official GSM8K test",

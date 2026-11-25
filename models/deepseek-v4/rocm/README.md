@@ -9,6 +9,7 @@ Nonquantized parameters are trained; packed FP4/FP8 weights stay frozen.
 
 | Configuration | Actor | Rollout |
 | --- | --- | --- |
+| [Single node · 4 GPUs](configs/single-node-4gpu.json) | Physical GPUs 4–5: PP2 × DP1 | Physical GPUs 6–7: one PP2 instance |
 | [Single node · 8 GPUs](configs/single-node-8gpu.json) | GPUs 0–3: PP2 × DP2 | GPUs 4–7: two PP2 instances |
 | [Four nodes · 32 GPUs](configs/four-node-32gpu.json) | Nodes 0–1: PP2 × DP8, 16 GPUs | Nodes 2–3: eight PP2 instances, 16 GPUs |
 
@@ -29,7 +30,7 @@ Use these two repositories. The verl integration is the **RL-Align fork**:
 | verl | [RL-Align/verl](https://github.com/RL-Align/verl) | [`main`](https://github.com/RL-Align/verl/tree/main) | [`d154f5aa3d9a5a19210bc2df499db6ef6532db90`](https://github.com/RL-Align/verl/commit/d154f5aa3d9a5a19210bc2df499db6ef6532db90) |
 
 Branch names identify the source line; exact commits fix the runtime baseline.
-The `build` command fetches these commits and applies the four patches listed
+The `build` command fetches these commits and applies the four paired patches and the workspace fix listed
 below automatically. No separate framework checkout or manual patching is needed.
 Checking out the two branches alone does not include the recipe's 8-/32-GPU
 extensions. Do not replace the fork with `verl-project/verl` or an unpinned
@@ -41,7 +42,7 @@ not use the latest branch heads.
 
 | Component | Package version | Recipe source pin |
 | --- | --- | --- |
-| RL-Kernel | `0.1.1` | `71c7cb2d033806632cef1a3678939bf73dc581dd` + [paired patch](patches/eight-gpu-rl-kernel.patch) + [recipe patch](patches/recipe-rl-kernel.patch) |
+| RL-Kernel | `0.1.1` | `71c7cb2d033806632cef1a3678939bf73dc581dd` + [paired patch](patches/eight-gpu-rl-kernel.patch) + [recipe patch](patches/recipe-rl-kernel.patch) + [workspace fix](patches/native-sparse-workspace.patch) |
 | RL-Align/verl | `0.10.0.dev0` | `d154f5aa3d9a5a19210bc2df499db6ef6532db90` + [paired patch](patches/eight-gpu-verl.patch) + [recipe patch](patches/recipe-verl.patch) |
 | Megatron-LM / Core | `0.21.0+97b50bd` | `97b50bdd936022ef58031c35db6d10581c181be0` |
 | vLLM | `0.34.0rc1.dev366+gc07d58dc8` | `c07d58dc82d75f7d1a947b3264b460384ec3e18d` |
@@ -51,6 +52,8 @@ The base image is fixed by registry digest:
 ```text
 vensenmu/rl-kernel@sha256:f3bf76c2d3863bf5b3f6a912d106a6eb2042ad9898c54f60b1e9015d6aeb225f
 ```
+
+The baseline commits and four paired patches remain unchanged. The explicit workspace fix is [RL-Kernel #862](https://github.com/RL-Align/RL-Kernel/pull/862), source commit `58d430f0c9b24c9bab4b4d03e790b42bf0e6a0c2`, temporarily carried as a separately checksummed patch. The recipe requests a checked 16 GiB native sparse workspace budget for both profiles; the 8192-query target backward estimate is about 12.27 GiB. It keeps the same arithmetic kernels, geometry validation and strict acceptance, and does not reserve 16 GiB for small calls.
 
 Patch checksums and the expected final source-tree hashes are enforced by
 [sources.lock.json](sources.lock.json). The generated `runtime.lock.json`
@@ -76,7 +79,8 @@ result does not validate a newly assembled image or the four-node run.
 ## Requirements
 
 - Linux with a compatible ROCm driver, Docker, Git, Python 3.10+ and `rocm-smi`.
-- Eight idle GPUs, physical IDs 0–7, on each node. Use the same architecture across nodes.
+- Four idle selected GPUs for `single-node-4gpu` (default physical IDs 4–7), or eight idle GPUs 0–7 for the 8-/32-GPU configurations. Use the same architecture across nodes.
+- Four GPUs provide **four-card functional validation** only; they do not validate eight-card DP2 or four-node execution. Ordered `nodes[].gpus` assigns the first half to actor and the second half to rollout. Only selected DRM devices and KFD GPU IDs are exposed, then actual worker PCI identities are independently verified. The launcher bind-mounts host `/sys` read-only because rootless Docker can otherwise omit ROCm topology metadata; it does not enable privileged mode or expose additional GPU device nodes.
 - For four nodes: noninteractive SSH from the first node and the same shared
   filesystem mounted at `work_dir` on every node.
 - Reachable node IPs and the cluster's Ray/RCCL network access. Enable RDMA only
@@ -114,6 +118,9 @@ cd recipes
 Choose **one** configuration:
 
 ```bash
+# Four-card functional validation on physical GPUs 4–7
+# cp models/deepseek-v4/rocm/configs/single-node-4gpu.json site.json
+
 # Single node, 8 GPUs
 cp models/deepseek-v4/rocm/configs/single-node-8gpu.json site.json
 
@@ -127,6 +134,7 @@ Edit `site.json`:
 
 | Field | Set to |
 | --- | --- |
+| `nodes[].gpus` | Ordered physical GPU IDs: four selected IDs for the four-card topology; IDs 0–7 for other topologies |
 | `nodes[].ip` | Each node's reachable IP address |
 | `nodes[].ssh` | `local` for the first node; SSH alias or `user@host` for peers |
 | `work_dir` | Writable work directory; a shared filesystem for four nodes |
@@ -156,6 +164,8 @@ Do not prepare the same dataset directory twice.
 python3 run.py run --config site.json
 ```
 
+All topologies retain three continuous effective updates, full-training-batch raw FP32 bit equality and the independent native verifier. The four-card verifier additionally requires exactly two actor ranks (DP1), one PP2 rollout replica, and PCI devices matching the declared physical role allocation.
+
 The launcher prints a new directory under `work_dir/runs/`, runs independent
 verification and writes `report.md`. It stops only the containers it created.
 A successful run must have `"status": "PASS"` in `verification.json`.
@@ -166,7 +176,7 @@ After the correctness run passes, use real DAPO-Math-17k or GSM8K data.
 
 | Profile | Updates | Prompts × responses | Response cap |
 | --- | --- | --- | --- |
-| `smoke` | 3 | 2 × 2 on 8 GPUs; 8 × 2 on 32 GPUs | 16 tokens |
+| `smoke` | 3 | 2 × 2 on 4/8 GPUs; 8 × 2 on 32 GPUs | 16 tokens |
 | `math-smoke` | 3 | 8 × 16 | 7,168 tokens |
 | `math-200` | 200 | 8 × 16 | 7,168 tokens |
 
@@ -204,6 +214,8 @@ python3 run.py run --config site.json
 Both short runs must use the same image, model and allocation as the long run.
 The math short run must also use the same dataset and load. This requests 200
 optimizer updates, not 200 epochs.
+
+Math preparation uses the same native DeepSeek-V4 Continuous Token encoder as AgentLoop; the delivered tokenizer intentionally has no Jinja chat template. DAPO's original parquet is retained and its SHA256 is checked against the LFS digest at the locked revision. Published row order and ground truth are preserved.
 
 Math prompts are capped at 1,024 tokens. Actual response lengths and token
 counts are recorded. Zero advantages, invalid gradients or any raw FP32

@@ -21,7 +21,7 @@ def sources(output):
             "RL-Kernel",
             pins["kernel_base"],
             pins["kernel_tree"],
-            ["eight-gpu-rl-kernel.patch", "recipe-rl-kernel.patch"],
+            ["eight-gpu-rl-kernel.patch", "recipe-rl-kernel.patch", "native-sparse-workspace.patch"],
         ),
         ("verl", pins["verl"], pins["verl_tree"], ["eight-gpu-verl.patch", "recipe-verl.patch"]),
     ):
