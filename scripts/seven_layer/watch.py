@@ -64,11 +64,22 @@ def snapshot(selected=None):
     )
     cards = json.loads(raw)
     mapping = run(["rocm-smi", "--showpidgpus"])
-    pids = [int(x) for x in re.findall(r"PID (\d+) is using", mapping)]
-    # Both APIs must agree; missing visibility is never idle.
-    summary_pids = sorted(int(k[3:]) for k in cards.get("system", {}) if re.fullmatch(r"PID\d+", k))
-    if sorted(pids) != summary_pids:
-        raise RuntimeError("ROCm process APIs disagree; retry on next poll")
+    # showpids includes KFD contexts with GPU(s)=0. showpidgpus may omit
+    # those contexts; compare only actual device-associated processes.
+    pids = selected_occupants(mapping, list(range(8)))
+    summary_pids = []
+    for key, value in cards.get("system", {}).items():
+        if not re.fullmatch(r"PID\d+", key):
+            continue
+        fields = [part.strip() for part in value.split(",")]
+        if len(fields) != 5:
+            raise RuntimeError("ROCm process summary lacks GPU activity fields")
+        if int(fields[1]) > 0:
+            summary_pids.append(int(key[3:]))
+    if sorted(pids) != sorted(summary_pids):
+        raise RuntimeError(
+            f"ROCm active process APIs disagree: device_map={pids}, process_summary={summary_pids}"
+        )
     processes = []
     for pid in pids:
         info = run(["ps", "-p", str(pid), "-o", "pid,ppid,user,lstart,args"])

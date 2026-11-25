@@ -41,13 +41,35 @@ def resource_policy(root):
     return json.loads(path.read_text()) if path.exists() else None
 
 
+def observe(root, gpus, *, own_container=None):
+    errors = []
+    for attempt in range(5):
+        try:
+            sample = snapshot(gpus)
+            receipt = evaluate(sample, resource_policy(root), own_container=own_container)
+            if errors:
+                sample["bounded_observation_retries"] = errors
+                write(
+                    root / ("observation-retry-" + uuid4().hex[:8] + ".json"),
+                    dict(errors=errors, final_sample=sample),
+                )
+            return sample, receipt
+        except ResourceConflict:
+            raise
+        except (RuntimeError, OSError, subprocess.CalledProcessError) as error:
+            errors.append(f"{type(error).__name__}: {error}")
+            if attempt < 4:
+                time.sleep(0.5)
+    write(root / ("observation-failure-" + uuid4().hex[:8] + ".json"), dict(errors=errors))
+    raise RuntimeError("resource observation did not stabilize after five bounded attempts: " + errors[-1])
+
+
 def wait_idle(root, gpus):
     while True:
         try:
-            sample = snapshot(gpus)
+            sample, receipt = observe(root, gpus)
             with (root / "gpu-samples.jsonl").open("a") as f:
                 f.write(json.dumps(sample) + "\n")
-            receipt = evaluate(sample, resource_policy(root))
             write(root / "latest-preflight.json", receipt)
             return
         except (RuntimeError, subprocess.CalledProcessError) as e:
@@ -212,13 +234,12 @@ def launch(
                 raise TimeoutError("own phase exceeded two-hour timeout; retained logs and checkpoints")
             if elapsed >= next_sample:
                 next_sample = elapsed + 5
-                sample = snapshot(gpus)
-                with (run / "gpu-samples.jsonl").open("a") as f:
-                    f.write(json.dumps(sample) + "\n")
                 try:
-                    evaluate(sample, resource_policy(run), own_container=cid)
-                except ResourceConflict as error:
-                    write(out / "external-conflict.json", dict(error=str(error), sample=sample))
+                    sample, _ = observe(run, gpus, own_container=cid)
+                    with (run / "gpu-samples.jsonl").open("a") as f:
+                        f.write(json.dumps(sample) + "\n")
+                except Exception as error:
+                    write(out / "external-conflict.json", dict(error=str(error), container_id=cid))
                     label = subprocess.check_output(
                         [
                             "docker",
@@ -228,7 +249,7 @@ def launch(
                         ],
                         text=True,
                     ).strip()
-                    if label == run.name:
+                    if label == run.name and proc.poll() is None:
                         subprocess.run(["docker", "stop", "--timeout", "15", cid], check=True)
                     proc.wait()
                     raise

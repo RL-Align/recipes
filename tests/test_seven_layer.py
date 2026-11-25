@@ -18,7 +18,7 @@ def load(name):
 
 def cards(occupied=False, resident=300000000):
     result = {f"card{i}": {"VRAM Total Used Memory (B)": str(resident), "GPU use (%)": "0"} for i in range(8)}
-    result["system"] = {"PID123": "python"} if occupied else {}
+    result["system"] = {"PID123": "python, 1, 300000000, 0, 0"} if occupied else {}
     return result
 
 
@@ -98,3 +98,25 @@ def test_selected_pool_ignores_only_unselected_tasks_and_rejects_selected_occupa
         watch.selected_occupants("PID 123 is using 2 DRM device(s):\n0\n", [4, 5, 6, 7])
     with pytest.raises(ValueError, match="unique"):
         watch.snapshot([4, 4])
+
+
+def test_zero_gpu_kfd_context_is_recorded_without_masking_any_actual_gpu_owner(monkeypatch):
+    watch = load("watch")
+    state = cards()
+    state["system"] = {"PID123": "python, 0, 2097152, 0, 0"}
+    mapping = ""
+
+    def run(argv):
+        if "--json" in argv:
+            return json.dumps(state)
+        if "--showpidgpus" in argv:
+            return mapping
+        return "123 root context"
+
+    monkeypatch.setattr(watch, "run", run)
+    assert watch.snapshot([0])["idle"] is True
+    mapping = "PID 123 is using 1 DRM device(s):\n0\n"
+    with pytest.raises(RuntimeError, match="disagree"):
+        watch.snapshot([0])
+    state["system"]["PID123"] = "python, 1, 2097152, 0, 0"
+    assert watch.snapshot([0])["idle"] is False

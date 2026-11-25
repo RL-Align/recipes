@@ -10,8 +10,7 @@ import time
 from pathlib import Path
 from uuid import uuid4
 
-from execute import allocation, container_base, snapshot, wait_idle, write
-from resource_policy import evaluate
+from execute import allocation, container_base, observe, wait_idle, write
 
 
 def phase(work, root, image, policy, rows, mode):
@@ -50,10 +49,9 @@ def phase(work, root, image, policy, rows, mode):
                     raise TimeoutError("health/communication phase exceeded 180 seconds")
                 if elapsed >= next_sample:
                     next_sample = elapsed + 5
-                    sample = snapshot(gpus)
+                    sample, _ = observe(root, gpus, own_container=cid)
                     with (root / "gpu-samples.jsonl").open("a") as f:
                         f.write(json.dumps(sample) + "\n")
-                    evaluate(sample, policy, own_container=cid)
                 time.sleep(1)
         except BaseException as error:
             write(out / "conflict-or-error.json", dict(error=str(error)))
