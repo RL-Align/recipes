@@ -11,11 +11,10 @@ with **RL-Kernel**. Find a model, choose a hardware backend, and follow its reci
 
 | Model | Backend | Framework | Allocation | Guide |
 | --- | --- | --- | --- | --- |
-| DeepSeek-V4 · four layers | AMD ROCm | verl + RL-Kernel | Single node · 8 GPUs | [Open recipe](models/deepseek-v4/rocm/README.md) |
-| DeepSeek-V4 · four layers | AMD ROCm | verl + RL-Kernel | Four nodes · 32 GPUs | [Open recipe](models/deepseek-v4/rocm/README.md) |
+| DeepSeek-V4 | AMD ROCm | verl + RL-Kernel | 8 GPUs / 32 GPUs | [Open recipe](models/deepseek-v4/rocm/README.md) |
 
-Each recipe states its tested scope and validation status. An available
-configuration is not a hardware acceptance result.
+Checkpoint, model depth, tested configurations and validation status are
+specified in each guide.
 
 ## Getting started
 

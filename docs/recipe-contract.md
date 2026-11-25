@@ -16,6 +16,12 @@ Every recipe must provide:
 6. **Status:** measured, CPU-checked, hardware-pending and failed are distinct.
    A short-run result does not establish a long-run or cross-node claim.
 
+Recipes should primarily contain instructions, configuration and version locks.
+Small preparation, launch and verification helpers are appropriate when needed.
+Training algorithms, kernels and framework integrations belong in RL-Kernel or
+the integration framework; prefer pinned upstream commits over bundled patches.
+Temporary patches must retain their provenance and checksums until integrated.
+
 The repository README is a model/backend index. Keep image downloads, model-specific
 setup commands and validation records inside each recipe directory. Model/backend
 details belong under `models/`; reusable orchestration belongs in

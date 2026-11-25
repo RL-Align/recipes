@@ -3,7 +3,7 @@
 Native GRPO with **verl + RL-Kernel**, using the original four-layer checkpoint.
 Nonquantized parameters are trained; packed FP4/FP8 weights stay frozen.
 
-[Requirements](#requirements) · [Image](#container-image) · [Quick start](#quick-start) · [Math workload](#math-workload) · [Results](#results)
+[Versions](#fixed-versions) · [Requirements](#requirements) · [Image](#container-image) · [Quick start](#quick-start) · [Math workload](#math-workload) · [Results](#results)
 
 ## Configurations
 
@@ -18,6 +18,46 @@ This is a reduced-depth model, not a full-model training run.
 **Validation:** CPU checks pass. The assembled image and GPU runs still need
 hardware validation; the four-node configuration is experimental.
 [Validation record](validation.md).
+
+## Fixed versions
+
+Package versions below come from the PR #711 base image. The recipe builds the
+listed RL-Kernel and verl commits **plus the locked paired patches**; it does
+not use the latest branch heads.
+
+| Component | Package version | Recipe source pin |
+| --- | --- | --- |
+| RL-Kernel | `0.1.1` | `71c7cb2d033806632cef1a3678939bf73dc581dd` + [paired patch](patches/eight-gpu-rl-kernel.patch) + [recipe patch](patches/recipe-rl-kernel.patch) |
+| RL-Align/verl | `0.10.0.dev0` | `d154f5aa3d9a5a19210bc2df499db6ef6532db90` + [paired patch](patches/eight-gpu-verl.patch) + [recipe patch](patches/recipe-verl.patch) |
+| Megatron-LM / Core | `0.21.0+97b50bd` | `97b50bdd936022ef58031c35db6d10581c181be0` |
+| vLLM | `0.34.0rc1.dev366+gc07d58dc8` | `c07d58dc82d75f7d1a947b3264b460384ec3e18d` |
+
+The base image is fixed by registry digest:
+
+```text
+vensenmu/rl-kernel@sha256:f3bf76c2d3863bf5b3f6a912d106a6eb2042ad9898c54f60b1e9015d6aeb225f
+```
+
+Patch checksums and the expected final source-tree hashes are enforced by
+[sources.lock.json](sources.lock.json). The generated `runtime.lock.json`
+records the derived image ID and recipe commit used for a run.
+
+| Input | Repository | Fixed revision |
+| --- | --- | --- |
+| Four-layer checkpoint and baseline data | [RL-Align/DeepSeek-V4-Flash-4L](https://huggingface.co/RL-Align/DeepSeek-V4-Flash-4L) | `4cdbf146efa5e2248349cfa33d4bfb54447c6dfd` |
+| DAPO-Math-17k | [BytedTsinghua-SIA/DAPO-Math-17k](https://huggingface.co/datasets/BytedTsinghua-SIA/DAPO-Math-17k) | `65877096c24ffa7abc4e4fa5edb95cf3413a5674` |
+| GSM8K, main subset | [openai/gsm8k](https://huggingface.co/datasets/openai/gsm8k) | `740312add88f781978c0658806c59bc2815b9866` |
+
+<details>
+<summary>Original PR #711 measured source pins</summary>
+
+The historical four-GPU result used RL-Kernel
+`478caf1a787f6c9d9d3747a45ad79756b6c2c616` and verl
+`8196af485ae50e09aa42c1fc6e399f266fb166d3`. Those are the measured baseline
+commits, not the expanded eight-/32-GPU recipe source pair above. The original
+result does not validate a newly assembled image or the four-node run.
+
+</details>
 
 ## Requirements
 
