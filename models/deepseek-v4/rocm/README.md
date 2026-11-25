@@ -21,6 +21,20 @@ hardware validation; the four-node configuration is experimental.
 
 ## Fixed versions
 
+Use these two repositories. The verl integration is the **RL-Align fork**:
+
+| Project | Repository | Source branch | Locked base commit |
+| --- | --- | --- | --- |
+| RL-Kernel | [RL-Align/RL-Kernel](https://github.com/RL-Align/RL-Kernel) | [`dsv4-rocm`](https://github.com/RL-Align/RL-Kernel/tree/dsv4-rocm) | [`71c7cb2d033806632cef1a3678939bf73dc581dd`](https://github.com/RL-Align/RL-Kernel/commit/71c7cb2d033806632cef1a3678939bf73dc581dd) |
+| verl | [RL-Align/verl](https://github.com/RL-Align/verl) | [`main`](https://github.com/RL-Align/verl/tree/main) | [`d154f5aa3d9a5a19210bc2df499db6ef6532db90`](https://github.com/RL-Align/verl/commit/d154f5aa3d9a5a19210bc2df499db6ef6532db90) |
+
+Branch names identify the source line; exact commits fix the runtime baseline.
+The `build` command fetches these commits and applies the four patches listed
+below automatically. No separate framework checkout or manual patching is needed.
+Checking out the two branches alone does not include the recipe's 8-/32-GPU
+extensions. Do not replace the fork with `verl-project/verl` or an unpinned
+`pip install verl` for this recipe.
+
 Package versions below come from the PR #711 base image. The recipe builds the
 listed RL-Kernel and verl commits **plus the locked paired patches**; it does
 not use the latest branch heads.
