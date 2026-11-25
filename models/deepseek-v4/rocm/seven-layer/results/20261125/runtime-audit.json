@@ -1,0 +1,46 @@
+{
+  "import_paths": {
+    "rl_engine": "/opt/dsv4/RL-Kernel/rl_engine/__init__.py",
+    "verl": "/opt/dsv4/verl/verl/__init__.py",
+    "torch": "/usr/local/lib/python3.12/dist-packages/torch/__init__.py",
+    "vllm": "/opt/dsv4/vllm/vllm/__init__.py",
+    "megatron.core": "/opt/dsv4/Megatron-LM/megatron/core/__init__.py"
+  },
+  "repositories": {
+    "RL-Kernel": {
+      "commit": "a275b3facfbb020eb0fcc062d93c89f9eefff9d7",
+      "tree": "ba2f53cbaa1f5a7900a215da9068c5b5d3167f74",
+      "dirty": "",
+      "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "verl": {
+      "commit": "53c9dd1d659390b63186ae53825872842e7addf2",
+      "tree": "3cbb4cb80e1a780562c0c8d6b2eeb3e6ca4debdb",
+      "dirty": "",
+      "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "vllm": {
+      "commit": "c07d58dc82d75f7d1a947b3264b460384ec3e18d",
+      "tree": "f13f8381086e06fceaf36c42d7751390e3bdbc1d",
+      "dirty": "",
+      "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "Megatron-LM": {
+      "commit": "97b50bdd936022ef58031c35db6d10581c181be0",
+      "tree": "4777ae138de517deda1861d66c6e688b9d0627cd",
+      "dirty": "",
+      "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "packages": {
+    "torch": "2.13.0+rocm10.0.0",
+    "vllm": "0.34.0rc1.dev366+gc07d58dc8",
+    "megatron-core": "0.21.0+97b50bd",
+    "megatron-bridge": "0.7.0",
+    "transformer-engine": "2.21.0.dev0",
+    "triton": "3.8.0+git669b31ac",
+    "ray": "2.60.0",
+    "verl": "0.10.0.dev0",
+    "amd-aiter": "0.1.29"
+  }
+}

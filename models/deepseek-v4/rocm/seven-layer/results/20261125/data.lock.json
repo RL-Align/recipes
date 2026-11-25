@@ -1,0 +1,9 @@
+{
+  "repo": "BytedTsinghua-SIA/DAPO-Math-17k",
+  "revision": "65877096c24ffa7abc4e4fa5edb95cf3413a5674",
+  "file": "dapo-math-17k.parquet",
+  "bytes": 299363855,
+  "sha256": "534375d6bb8630d22ab46a56e11f2ffec1d288d8f7d04099bc82d68948705941",
+  "lfs_sha256": "534375d6bb8630d22ab46a56e11f2ffec1d288d8f7d04099bc82d68948705941",
+  "scope": "Pinned original data acquired and verified. Seven-layer training preprocessing and real-data GPU updates NOT_RUN."
+}
