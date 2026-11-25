@@ -64,6 +64,26 @@ def observe(root, gpus, *, own_container=None):
     raise RuntimeError("resource observation did not stabilize after five bounded attempts: " + errors[-1])
 
 
+def stop_owned_container(cid, owner, timeout=15):
+    """Stop only a live container with our exact label; --rm may have won the race."""
+    inspected = subprocess.run(
+        ["docker", "inspect", '--format={{index .Config.Labels "rl-align.seven-layer-N"}}', cid],
+        text=True,
+        capture_output=True,
+    )
+    if inspected.returncode:
+        if "no such object" in inspected.stderr.lower():
+            return
+        raise RuntimeError("cannot verify own container identity: " + inspected.stderr)
+    if inspected.stdout.strip() != owner:
+        raise RuntimeError("refusing to stop a container whose ownership label differs")
+    stopped = subprocess.run(
+        ["docker", "stop", "--timeout", str(timeout), cid], text=True, capture_output=True
+    )
+    if stopped.returncode and "no such container" not in stopped.stderr.lower():
+        raise RuntimeError("own container stop failed: " + stopped.stderr)
+
+
 def wait_idle(root, gpus):
     while True:
         try:
@@ -228,12 +248,7 @@ def launch(
             time.sleep(1)
             elapsed = time.monotonic() - began
             if elapsed > 7200:
-                label = subprocess.check_output(
-                    ["docker", "inspect", '--format={{index .Config.Labels "rl-align.seven-layer-N"}}', cid],
-                    text=True,
-                ).strip()
-                if label == run.name:
-                    subprocess.run(["docker", "stop", "--time", "30", cid], check=True)
+                stop_owned_container(cid, run.name, timeout=30)
                 raise TimeoutError("own phase exceeded two-hour timeout; retained logs and checkpoints")
             if elapsed >= next_sample:
                 next_sample = elapsed + 5
@@ -243,17 +258,7 @@ def launch(
                         f.write(json.dumps(sample) + "\n")
                 except Exception as error:
                     write(out / "external-conflict.json", dict(error=str(error), container_id=cid))
-                    label = subprocess.check_output(
-                        [
-                            "docker",
-                            "inspect",
-                            '--format={{index .Config.Labels "rl-align.seven-layer-N"}}',
-                            cid,
-                        ],
-                        text=True,
-                    ).strip()
-                    if label == run.name and proc.poll() is None:
-                        subprocess.run(["docker", "stop", "--timeout", "15", cid], check=True)
+                    stop_owned_container(cid, run.name)
                     proc.wait()
                     raise
         code = proc.returncode
@@ -506,7 +511,14 @@ def run(work, image, gpus, groups, runtime_lock, shared_policy, health_receipt, 
         runtime = json.loads(runtime_lock.read_text())
         if runtime["image_id"] != image:
             raise ValueError("runtime image lock differs")
-        write(run_root / "provenance.json", dict(image_id=image, sources=runtime["sources"], trace_audit_pattern=os.environ.get("RLK_TRACE_AUDIT_PATTERN")))
+        write(
+            run_root / "provenance.json",
+            dict(
+                image_id=image,
+                sources=runtime["sources"],
+                trace_audit_pattern=os.environ.get("RLK_TRACE_AUDIT_PATTERN"),
+            ),
+        )
         summary = {
             p["id"]: dict(status="NOT_RUN", fixed_weight="NOT_RUN", updates=0, target_load="NOT_RUN")
             for p in profiles()

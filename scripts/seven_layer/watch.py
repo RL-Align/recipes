@@ -74,6 +74,8 @@ def snapshot(selected=None):
         fields = [part.strip() for part in value.split(",")]
         if len(fields) != 5:
             raise RuntimeError("ROCm process summary lacks GPU activity fields")
+        if not fields[1].isdigit():
+            raise RuntimeError(f"ROCm process GPU count temporarily unavailable: {key}={value!r}")
         if int(fields[1]) > 0:
             summary_pids.append(int(key[3:]))
     if sorted(pids) != sorted(summary_pids):

@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 from uuid import uuid4
 
-from execute import allocation, container_base, observe, wait_idle, write
+from execute import allocation, container_base, observe, stop_owned_container, wait_idle, write
 
 
 def phase(work, root, image, policy, rows, mode):
@@ -55,12 +55,7 @@ def phase(work, root, image, policy, rows, mode):
                 time.sleep(1)
         except BaseException as error:
             write(out / "conflict-or-error.json", dict(error=str(error)))
-            label = subprocess.check_output(
-                ["docker", "inspect", '--format={{index .Config.Labels "rl-align.seven-layer-N"}}', cid],
-                text=True,
-            ).strip()
-            if label == root.name:
-                subprocess.run(["docker", "stop", "--timeout", "15", cid], check=True)
+            stop_owned_container(cid, root.name)
             proc.wait()
             raise
     if proc.returncode:

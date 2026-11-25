@@ -120,3 +120,12 @@ def test_zero_gpu_kfd_context_is_recorded_without_masking_any_actual_gpu_owner(m
         watch.snapshot([0])
     state["system"]["PID123"] = "python, 1, 2097152, 0, 0"
     assert watch.snapshot([0])["idle"] is False
+
+
+def test_unknown_gpu_count_is_retryable_but_never_admitted(monkeypatch):
+    watch = load("watch")
+    state = cards()
+    state["system"] = {"PID123": "python, unknown, unknown, unknown, unknown"}
+    monkeypatch.setattr(watch, "run", lambda argv: json.dumps(state) if "--json" in argv else "")
+    with pytest.raises(RuntimeError, match="temporarily unavailable"):
+        watch.snapshot([0])
