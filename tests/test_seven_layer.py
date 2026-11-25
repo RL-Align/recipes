@@ -52,10 +52,18 @@ def test_resident_memory_and_disagreeing_process_apis_fail_closed(monkeypatch):
 def test_no_duplicate_dp_replica_or_added_actor_rollout_card_counts():
     matrix = load("matrix")
     targets = matrix.profiles()
-    assert [p["actor"]["gpus"] for p in targets] == [1, 2, 4, 8, 8]
-    assert [p["rollout"]["gpus"] for p in targets] == [2, 4, 8, 1, 8]
+    assert [p["actor"]["gpus"] for p in targets] == [2, 2, 2, 2, 8]
+    assert [p["rollout"]["gpus"] for p in targets] == [1, 2, 4, 8, 8]
     assert targets[-1]["peak_physical_gpus"] == 8
     assert all(
-        p["actor"]["dp"] == p["actor"]["expert_dp"] == 1 and p["rollout"]["instances"] == 1 for p in targets
+        p["actor"]["dp"] == p["actor"]["expert_dp"] == 1 and p["rollout"]["instances"] == 1
+        for p in targets[:4]
     )
     assert targets[-1]["actor_pp_layers"] == [[0, 1, 2, 3], [4, 5, 6]]
+
+    assert targets[-1]["actor"]["dp"] == 4
+    assert targets[-1]["actor"]["expert_dp"] == 1
+    assert "execution_gate" in targets[-1]
+    assert all(p["actor"]["tp"] == p["actor"]["etp"] == 1 for p in targets)
+    with pytest.raises(ValueError, match="must remain one"):
+        matrix.profile("unsupported", 2, 2, 1, 1, 2)

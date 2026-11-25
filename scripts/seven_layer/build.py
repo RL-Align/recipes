@@ -22,7 +22,7 @@ def main():
         raise ValueError("commit recipe changes before rebuilding")
     pins = json.loads((BOOK / "sources.lock.json").read_text())
     recipe_commit = output(["git", "-C", str(ROOT), "rev-parse", "HEAD"])
-    tag = "rl-align/dsv4-seven-layer:diagnostic-" + recipe_commit[:12]
+    tag = "rl-align/dsv4-seven-layer:actor-tp1-" + recipe_commit[:12]
     values = dict(
         BASE_IMAGE=pins["base_image"]["reference"],
         RLK_SHA=pins["kernel"]["commit"],
@@ -43,7 +43,7 @@ def main():
         recipe_commit=recipe_commit,
         sources=pins,
         build_command=command,
-        scope="GPU startup diagnostics only; no complete matrix/GRPO implementation or GPU acceptance",
+        scope="Experimental actor-TP1 real scoring and native three-update phase execution; GPU acceptance pending; N5 EP4 not implemented",
     )
     runtime = args.work / "runtime"
     runtime.mkdir(parents=True, exist_ok=True)

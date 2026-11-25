@@ -8,7 +8,7 @@ ARG VERL_TREE
 ARG RECIPE_COMMIT
 LABEL org.opencontainers.image.source="https://github.com/RL-Align/recipes" \
       org.opencontainers.image.revision="${RECIPE_COMMIT}" \
-      rl-align.validation.scope="seven-layer-startup-diagnostics-only"
+      rl-align.validation.scope="seven-layer-actor-tp1-experimental-gpu-unvalidated"
 RUN set -eu; \
     rm -rf /opt/dsv4/RL-Kernel /opt/dsv4/verl; \
     for repo in RL-Kernel verl; do \

@@ -1,118 +1,109 @@
-# Seven original DSV4 layers on one eight-GPU AMD node
+# Seven-layer DSV4 actor-TP1 / rollout-TP1/2/4/8 validation
 
-**Experimental and incomplete. No M1–M5 GPU consistency or GRPO PASS is claimed.**
-This separate profile preserves the historical four-layer recipe. It adds original
-checkpoint extraction, a recoverable resource gate, five exact target profiles,
-a fixed-token input suite, real model startup diagnostics, and evidence replay.
-The remaining strict TP/EP kernels, weight resharding and phased GRPO lifecycle
-are not implemented by these helpers. Do not run the four-layer trainer with these
-JSON files or interpret a successful startup as acceptance.
+Experimental implementation, GPU acceptance pending. The original M1–M5 matrix
+was revised on 2026-11-25: native DSV4 Hybrid Attention and this actor integration
+require TP1. Historical configurations remain in `legacy-M-configs`; historical
+CPU/startup evidence does not qualify the revised matrix. Never remove the actor
+TP restriction or use Qwen3 support as DSV4 evidence.
 
-| Group | Actor PP/TP/EP/ETP | Actor GPUs | Rollout PP/TP/EP | Rollout GPUs | Peak physical GPUs |
-| --- | --- | ---: | --- | ---: | ---: |
-| M1 | 1/1/1/1 | 1 | 1/2/1 | 2 | 2 |
-| M2 | 1/2/1/2 | 2 | 1/4/1 | 4 | 4 |
-| M3 | 1/4/1/4 | 4 | 1/8/1 | 8 | 8 |
-| M4 | 1/8/1/8 | 8 | 1/1/1 | 1 | 8 |
-| M5 | 2/4/4/1 | 8 | 1/8/1 | 8 | 8 |
+| Group | Actor PP/TP/EP/ETP | Dense DP / expert DP | Actor GPUs | Rollout PP/TP/EP | Rollout GPUs |
+| --- | --- | --- | ---: | --- | ---: |
+| N1 | 2/1/1/1 | 1/1 | 2 | 1/1/1 | 1 |
+| N2 | 2/1/1/1 | 1/1 | 2 | 1/2/1 | 2 |
+| N3 | 2/1/1/1 | 1/1 | 2 | 1/4/1 | 4 |
+| N4 | 2/1/1/1 | 1/1 | 2 | 1/8/1 | 8 |
+| N5 | 2/1/4/1 | **4/1** | 8 | 1/8/1 | 8 |
 
-All ordinary DP, expert DP and CP are 1. Each rollout has one instance. The
-experiment requests all eight GPUs and reuses them across serial phases. Actor
-and rollout counts are never added. Sequence parallelism is requested for TP>1;
-its numerical path still requires implementation/qualification. M5's planned
-layer layout is `[0,1,2,3] / [4,5,6]`, with embedding on stage zero and final norm,
-output head and mHC contraction on stage one. EP4 assigns 64/256 experts per
-expert rank. Planned mappings are not evidence of live rank placement.
+All groups use original continuous layers 0–6, CP1, one rollout instance and
+serial phase reuse of the same eight-card machine. Actor PP2 uses 4/3 original
+layers: embedding on PP0; final norm, output head and mHC contraction on PP1.
+N5 is a later expert partition/sync extension, gated on N1–N4 correctness. Its
+EP4 compute/communication path is **not implemented or qualified here**. The
+executor records BLOCKED and never substitutes EP1 or blocks primary groups.
 
-## Preparation
+## Implementation and acceptance boundaries
 
-Choose a new persistent `WORK` directory. Do not overwrite an older extraction.
-The source is `deepseek-ai/DeepSeek-V4-Flash` revision
-`60d8d70770c6776ff598c94bb586a859a38244f1`.
+Implemented experimental paths include native PP2 actor execution, PP1 rollout
+TP1/2/4/8 group projection and original-vocabulary FP32 score gathering, actor
+policy export and original-tensor rollout shard readback, native verl generation,
+copy/math rewards, GRPO advantage, PPO loss and Megatron backward/optimizer.
+Cross-TP floating-point arithmetic still requires GPU bit qualification; a failed
+comparison stops that group. CPU success establishes no numerical GPU result.
+
+Every GPU phase is a new labelled private container. Exit releases its GPU
+contexts before the next phase. Actor reconstruction restores full model state
+including packed quantized buffers, optimizer masters/moments, scheduler, weight
+version and RNG. Restored values are checked before a new optimizer identity is
+recorded; this does not claim workers stayed resident.
+
+The independent verifier checks actual seven-layer PP ownership, rank count and
+PCI mapping, every exported nonquantized tensor and actual rollout shard bytes,
+all valid response-token raw FP32 bits, finite values and a one-bit negative
+control. A separate three-update verifier replays actual update-forward token
+coverage, checkpoint bytes, native gradient/parameter/optimizer evidence, PP
+transfers, exact recovery, and fresh/fixed post-update audits including version 3.
+
+## Reproduce the existing experiment
+
+Keep the current persistent WORK directory and verified assets. Do not download
+or extract them again when their locks already match. The original source is
+`deepseek-ai/DeepSeek-V4-Flash` revision
+`60d8d70770c6776ff598c94bb586a859a38244f1`; compression ratios are
+`[0,0,4,128,4,128,4]`. Original weights, scales, layer config, hash routing and
+metadata are retained; MTP is excluded. `checkpoint.lock.json` records every
+original tensor's dtype, shape and SHA256. DAPO-Math-17k is fixed at revision
+`65877096c24ffa7abc4e4fa5edb95cf3413a5674`.
 
 ```bash
-python3 scripts/seven_layer/prepare_checkpoint.py \
-  --reuse-cache /path/to/verified/original-source-shards \
-  --output "$WORK/models/DeepSeek-V4-Flash-7L"
 python3 scripts/seven_layer/matrix.py prepare --work "$WORK"
 python3 scripts/seven_layer/build.py --work "$WORK"
+# CPU request preparation uses the committed runtime and original native tokenizer;
+# reuse the existing data/requests-N files after checking requests.lock.json.
+python3 scripts/seven_layer/execute.py --work "$WORK" --image sha256:FINAL_IMAGE_ID
 ```
 
-The extractor checks each original shard against its pinned LFS size and SHA256,
-keeps original tensor bytes and scales, excludes MTP, and writes the complete
-parameter shape/dtype/hash/ownership manifest. The seven compression ratios are
-`[0,0,4,128,4,128,4]`; layers 0–2 retain their hash-routing tables. BF16/FP32
-trainability candidates are recorded; actual runtime `requires_grad` and frozen
-state still need auditing. No QAT/FP8/BF16 semantic switch is made.
+The executor runs common fixed actor weights against N1–N4 rollout configurations,
+then each passing group's three-update copy correctness trajectory, then a separate
+fresh three-update DAPO trajectory at 8 prompts ×16 responses, prompt cap1024 and
+response cap7168. It never launches 200 steps or multiple nodes. Equal rewards,
+zero advantages, no parameter change, OOM and missing evidence fail with artifacts
+retained. A reduced load cannot substitute for the target load.
 
-The source/image lock explicitly records the new RL-Align/verl main revision
-rather than reusing the old recipe's PASS. The historical paired patches are not
-silently inherited. No external vLLM, Megatron or AITER files are modified.
+Source checkouts must be clean committed revisions before building. The image
+records source trees and an immutable `.Id` in its runtime lock. Only RL-Kernel,
+RL-Align/verl and this recipe change; external framework source remains pinned.
 
-## Recoverable resource gate
+## Resource gate and continuation
+
+The revised watcher uses `evidence/watch-N` and **ready-N.json**. The old M ready
+file was archived and its watcher stopped. Never re-arm the old `ready.json`.
 
 ```bash
 python3 scripts/seven_layer/watch.py \
-  --output "$WORK/evidence/watch" --ready "$WORK/ready.json"
+  --output "$WORK/evidence/watch-N" --ready "$WORK/ready-N.json"
 ```
 
-Use tmux or the host's persistent task service. Only one watcher may hold its
-`monitor.lock`. It stores PID, status, 30-second timestamped GPU process/memory/
-utilization samples, disk usage, process commands, parents, start times and
-container cgroups. Zero utilization alone is never idle. It never kills tasks.
-A local lock prevents duplicate self-launch; it does not reserve GPUs from other
-users. No scheduler was present on the measured host.
+The gate checks immutable prerequisite hashes, all eight GPU processes, memory
+and utilization every 30 seconds, then repeats idle checks immediately before
+launch. The command in ready-N must invoke `execute.py`, never the old diagnostic
+coordinator. Locks prevent duplicate self-launch only; they do not reserve other
+users' GPUs. The executor rechecks before each phase, logs physical device
+allocation and each container lifecycle, and only stops its own labelled container
+on timeout. GPU utilization zero alone is insufficient. It never stops another
+user's task, shared Ray/Docker service, resets a GPU or restarts the node.
 
-`ready.json` must contain a real command argv and a nonempty list of immutable
-prerequisites (`path`, `sha256`). After hashing them, the gate requires all eight
-GPUs idle in two checks separated by five seconds and checks again immediately
-before starting. The diagnostic coordinator repeats the resource guard between
-stages and exposes only each phase's requested devices through DRM/KFD mapping.
-It stops only its own labelled container on timeout. Re-running a watcher whose
-`launched.json` exists is rejected to prevent duplicate execution.
+## Results and components
 
-The current executable continuation is:
+Maintain separate implementation, CPU, fixed-weight GPU, three-update and target
+load states. All unmeasured values are N/A. Count response tokens once per logical
+sample, never once per rank; report throughput per active GPU and per whole eight
+GPU machine. End-to-end step timing includes generation, scoring, update,
+synchronization, release/recovery and audits. Native metrics remain saved in
+`native-train-output.pt`; raw phase/execution JSONs retain individual timings.
 
-```bash
-python3 scripts/seven_layer/matrix.py diagnose --work "$WORK" --image sha256:IMAGE_ID
-```
-
-It attempts real GPU startup/model calls under each unchanged target topology,
-records original errors, and separates fixed-TP PP/EP diagnostics after M5
-failure. It **does not run optimizer updates**. Full fixed-weight validation,
-three effective GRPO updates and the target load remain blocked until their
-missing compute/sync/lifecycle paths are implemented and independently verified.
-No 200-step or multi-node command is enabled here.
-
-## Independent raw-score replay
-
-RL-Kernel provides a separate-process verifier:
-
-```bash
-python -m rl_engine.integrations.common.response_bitwise \
-  --suite "$WORK/evidence/fixed-input-suite.json" \
-  --left /path/to/actor.json --right /path/to/rollout.json \
-  --snapshot-sha256 CHECKPOINT_SHA256 --output verification.json
-```
-
-The manifests require original little-endian FP32 files, identical snapshot and
-logical input-suite hashes, temperature 1, top-k -1 and top-p 1. Every expected
-response token is compared, without tolerance, rounding or dtype conversion.
-Missing/duplicate samples, stale snapshot, nonfinite scores and shared score-file
-inodes fail. Signed zero differences and a one-bit perturbation are detected.
-This verifies numerical artifacts; it cannot establish real engine execution,
-rank placement, optimizer continuity or synchronization by itself.
-
-The prepared suite includes single samples, multi-sample AB/BA, repetition,
-lengths around C4/C128 and recent-window boundaries, and >512 compressed-key
-candidates. None of these branches is covered until the actual model executes it.
-
-## Metrics and status
-
-Report all M1–M5 fixed-weight, three-update and target-load outcomes separately.
-Use N/A for unexecuted metrics. Response tokens are counted once per logical
-sample; TP/PP/EP ranks never multiply the numerator. Report throughput both per
-active GPU and per reserved eight-card machine, and include actual synchronization
-and stage switching in end-to-end time. Disabled reference/KL fields are N/A.
-Three-step means are short-run observations, not steady-state performance.
-No baseline or speedup claim is made.
+Long inputs are prepared around compression/window boundaries and indexer Top-k
+candidate counts. Attention/compression state, indexer/Top-k, hash/later routing,
+routed/shared experts, mHC, embedding/head/norm, effective backward, PP transfers
+and N5 EP communication stay **uncovered until actual execution evidence**. Seven
+layers alone never establish coverage. Reports retain failed and partial steps
+and independent verifier results; no native baseline or speedup is inferred.

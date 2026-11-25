@@ -1,3 +1,5 @@
+> Original M matrix revised on 2026-11-25. Historical CPU/startup-only evidence; not N1–N5 GPU acceptance. See ../20261125-N.
+
 # Seven-layer DSV4 single-node cross-TP/PP/EP validation
 
 Status snapshot: 2026-11-25T11:13:36.255142+00:00 (UTC). **BLOCKED; no GPU model execution in this run.**

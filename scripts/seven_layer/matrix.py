@@ -1,25 +1,19 @@
 # SPDX-License-Identifier: MIT
-"""Single-node seven-layer matrix preparation and genuine GPU startup diagnostics.
-
-Diagnostics never satisfy the fixed-weight gate and cannot start GRPO updates.
-"""
+"""Prepare the revised actor-TP1 matrix. Actual execution lives in execute.py."""
 
 import argparse
-import datetime
 import json
-import subprocess
 import sys
-import time
 from pathlib import Path
-from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
-from node import allocation, idle  # noqa: E402
 
 
-def profile(name, pp, tp, ep, etp, rollout_tp):
-    world = pp * tp
+def profile(name, pp, tp, ep, etp, rollout_tp, dense_dp=1):
+    if tp != 1 or etp != 1:
+        raise ValueError("DSV4 actor TP and ETP must remain one")
+    world = pp * tp * dense_dp
     if world % (pp * etp * ep):
         raise ValueError("expert topology does not form complete groups")
     edp = world // (pp * etp * ep)
@@ -31,7 +25,15 @@ def profile(name, pp, tp, ep, etp, rollout_tp):
         original_layers=list(range(7)),
         physical_reservation=list(range(8)),
         actor=dict(
-            pp=pp, tp=tp, ep=ep, etp=etp, dp=1, expert_dp=edp, cp=1, gpus=world, sequence_parallel=tp > 1
+            pp=pp,
+            tp=tp,
+            ep=ep,
+            etp=etp,
+            dp=dense_dp,
+            expert_dp=edp,
+            cp=1,
+            gpus=world,
+            sequence_parallel=False,
         ),
         rollout=dict(pp=1, tp=rollout_tp, ep=1, dp=1, cp=1, gpus=rollout_tp, instances=1),
         phase_reuse=True,
@@ -45,11 +47,15 @@ def profile(name, pp, tp, ep, etp, rollout_tp):
 
 def profiles():
     return [
-        profile("M1", 1, 1, 1, 1, 2),
-        profile("M2", 1, 2, 1, 2, 4),
-        profile("M3", 1, 4, 1, 4, 8),
-        profile("M4", 1, 8, 1, 8, 1),
-        profile("M5", 2, 4, 4, 1, 8),
+        profile("N1", 2, 1, 1, 1, 1),
+        profile("N2", 2, 1, 1, 1, 2),
+        profile("N3", 2, 1, 1, 1, 4),
+        profile("N4", 2, 1, 1, 1, 8),
+        dict(
+            profile("N5", 2, 1, 4, 1, 8, dense_dp=4),
+            execution_gate="N1-N4 complete fixed-weight and three-update independent verification first",
+            purpose="Expert partition/synchronization extension; not a DP performance test",
+        ),
     ]
 
 
@@ -66,8 +72,9 @@ def prepare(work):
     planned = []
     for p in profiles():
         for rank in range(p["actor"]["gpus"]):
-            pp, tp = divmod(rank, p["actor"]["tp"])
-            ep = tp if p["actor"]["ep"] > 1 else 0
+            pp, within_stage = divmod(rank, p["actor"]["tp"] * p["actor"]["dp"])
+            dp, tp = divmod(within_stage, p["actor"]["tp"])
+            ep = dp if p["actor"]["ep"] > 1 else 0
             experts = p["actor"]["ep"]
             planned.append(
                 dict(
@@ -98,7 +105,7 @@ def prepare(work):
                     layers=list(range(7)),
                 )
             )
-    write(work / "evidence" / "planned-rank-map.json", planned)
+    write(work / "evidence" / "planned-rank-map-N.json", planned)
     samples = []
     lengths = [3, 4, 5, 127, 128, 129, 511, 512, 513, 2047, 2048, 2049, 2177]
     for length in lengths:
@@ -150,7 +157,7 @@ def prepare(work):
         checks.append(
             dict(
                 group=p["id"],
-                ordinary_dp=1,
+                ordinary_dp=p["actor"]["dp"],
                 expert_dp=1,
                 dimensions=dimensions,
                 divisibility="CPU_CHECKED",
@@ -159,180 +166,20 @@ def prepare(work):
                 status="BLOCKED",
                 blockers=[
                     "GPU0 root-owned process cannot be signalled by this account",
-                    "Real strict TP/EP operator and weight-resharding support is incomplete",
-                    "GRPO phase reuse with continuous optimizer state is not implemented",
+                    "Rollout TP computation/resharding and N5 EP4 support still need qualification",
+                    "Native phased GRPO implementation and recovery require actual GPU qualification",
                 ],
             )
         )
-    write(work / "evidence" / "topology-preflight.json", checks)
-
-
-def diagnose(work, image):
-    # This command is reached by the durable watcher after two idle checks. It repeats preflight.
-    idle(list(range(8)))
-    if (
-        subprocess.check_output(["docker", "image", "inspect", "--format={{.Id}}", image], text=True).strip()
-        != image
-    ):
-        raise ValueError("use an immutable image ID, not a mutable tag")
-    rows = allocation(list(range(8)))
-    run = (
-        work
-        / "gpu-diagnostics"
-        / (datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid4().hex[:8])
-    )
-    run.mkdir(parents=True)
-    write(run / "allocation.json", rows)
-    tasks = profiles()
-    diagnostic_tasks = [
-        profile("D-TP4-control", 1, 4, 1, 4, 4),
-        profile("D-TP4-PP2", 2, 4, 1, 4, 4),
-        profile("D-TP4-EP4", 1, 4, 4, 1, 4),
-    ]
-    results = []
-    m5_failed = False
-    for p in tasks + diagnostic_tasks:
-        diagnostic = p["id"].startswith("D-")
-        if diagnostic and not m5_failed:
-            continue
-        write(work / "profiles" / (p["id"] + ".json"), p)
-        for role in ["actor"] if diagnostic else ["actor", "rollout"]:
-            # Never launch into an external task or reuse devices left by a failed child.
-            idle(list(range(8)))
-            out = run / p["id"] / role
-            out.mkdir(parents=True)
-            active = rows[: p[role]["gpus"]]
-            name = "dsv4-7l-" + uuid4().hex[:12]
-            command = [
-                "docker",
-                "run",
-                "--rm",
-                "--init",
-                "--name",
-                name,
-                "--label",
-                "rl-align.seven-layer=" + run.name,
-                "--network=host",
-                "--ipc=private",
-                "--shm-size=16g",
-                "--device=/dev/kfd",
-                "--mount",
-                "type=bind,source=/sys,target=/sys,readonly",
-                "--mount",
-                f"type=bind,source={work},target=/experiment,readonly",
-                "--mount",
-                f"type=bind,source={out},target=/outputs",
-                "-e",
-                "LD_PRELOAD=/opt/dsv4/lib/rlk-isolated-kfd.so",
-                "-e",
-                "RLK_ALLOWED_KFD_GPU_IDS=" + ",".join(str(r["kfd_gpu_id"]) for r in active),
-                "-e",
-                "HIP_VISIBLE_DEVICES=" + ",".join(map(str, range(len(active)))),
-                "-e",
-                "CUDA_VISIBLE_DEVICES=" + ",".join(map(str, range(len(active)))),
-                "-e",
-                "VLLM_ROCM_USE_AITER=1",
-                "-e",
-                "OMP_NUM_THREADS=4",
-                "-e",
-                "HF_HOME=/tmp/huggingface",
-                "-e",
-                "TRITON_CACHE_DIR=/tmp/triton",
-                "-e",
-                "TORCH_EXTENSIONS_DIR=/tmp/torch_extensions",
-                "-e",
-                "VLLM_ENABLE_V1_MULTIPROCESSING=1",
-            ]
-            for r in active:
-                command += ["--device=" + r["render_node"]]
-            import os
-
-            for gid in sorted(
-                {os.stat("/dev/kfd").st_gid, *[os.stat(r["render_node"]).st_gid for r in active]}
-            ):
-                command += ["--group-add", str(gid)]
-            command += ["--entrypoint", "/opt/dsv4-venv/bin/python", image]
-            if role == "actor":
-                command += [
-                    "-m",
-                    "torch.distributed.run",
-                    "--standalone",
-                    "--nproc_per_node=" + str(p[role]["gpus"]),
-                ]
-            command += [
-                "-m",
-                "verl.experimental.rl_kernel.probe_topology",
-                "--profile",
-                f"/experiment/profiles/{p['id']}.json",
-                "--role",
-                role,
-                "--model",
-                "/experiment/models/DeepSeek-V4-Flash-7L",
-                "--output",
-                "/outputs",
-            ]
-            write(out / "command.json", command)
-            began = time.monotonic()
-            with (out / "driver.log").open("w") as log:
-                try:
-                    code = subprocess.run(
-                        command, stdout=log, stderr=subprocess.STDOUT, timeout=1800
-                    ).returncode
-                except subprocess.TimeoutExpired:
-                    # Stop only the exact container created by this invocation, after checking its run label.
-                    label = subprocess.check_output(
-                        [
-                            "docker",
-                            "inspect",
-                            '--format={{index .Config.Labels "rl-align.seven-layer"}}',
-                            name,
-                        ],
-                        text=True,
-                    ).strip()
-                    if label == run.name:
-                        subprocess.run(["docker", "stop", "--time", "30", name], check=True)
-                    code = 124
-            receipt = dict(
-                group=p["id"],
-                diagnostic=diagnostic,
-                role=role,
-                returncode=code,
-                seconds=time.monotonic() - began,
-                requested=p[role],
-                scope="GPU startup only; not fixed-weight parity or GRPO",
-                status="STARTUP_ONLY" if code == 0 else "FAIL",
-                optimizer_updates=0,
-            )
-            write(out / "result.json", receipt)
-            results.append(receipt)
-            if p["id"] == "M5" and code:
-                m5_failed = True
-            write(run / "results.json", results)
-    write(
-        run / "acceptance.json",
-        dict(
-            status="BLOCKED",
-            fixed_weight_validation="NOT_RUN",
-            grpo_updates=0,
-            reason="Startup diagnostics do not implement complete strict TP/EP computation or phased GRPO; no acceptance is inferred",
-            results=results,
-        ),
-    )
-    return run
+    write(work / "evidence" / "topology-preflight-N.json", checks)
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("action", choices=["prepare", "diagnose"])
+    ap.add_argument("action", choices=["prepare"])
     ap.add_argument("--work", type=Path, required=True)
-    ap.add_argument("--image")
     args = ap.parse_args()
-    if args.action == "prepare":
-        prepare(args.work.resolve())
-    else:
-        if not args.image:
-            ap.error("--image must be the immutable derived image ID")
-        print(diagnose(args.work.resolve(), args.image))
+    prepare(args.work.resolve())
 
 
 if __name__ == "__main__":
