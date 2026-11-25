@@ -30,7 +30,7 @@ Use these two repositories. The verl integration is the **RL-Align fork**:
 | verl | [RL-Align/verl](https://github.com/RL-Align/verl) | [`main`](https://github.com/RL-Align/verl/tree/main) | [`d154f5aa3d9a5a19210bc2df499db6ef6532db90`](https://github.com/RL-Align/verl/commit/d154f5aa3d9a5a19210bc2df499db6ef6532db90) |
 
 Branch names identify the source line; exact commits fix the runtime baseline.
-The `build` command fetches these commits and applies the four patches listed
+The `build` command fetches these commits and applies the four paired patches and the workspace fix listed
 below automatically. No separate framework checkout or manual patching is needed.
 Checking out the two branches alone does not include the recipe's 8-/32-GPU
 extensions. Do not replace the fork with `verl-project/verl` or an unpinned
@@ -42,7 +42,7 @@ not use the latest branch heads.
 
 | Component | Package version | Recipe source pin |
 | --- | --- | --- |
-| RL-Kernel | `0.1.1` | `71c7cb2d033806632cef1a3678939bf73dc581dd` + [paired patch](patches/eight-gpu-rl-kernel.patch) + [recipe patch](patches/recipe-rl-kernel.patch) |
+| RL-Kernel | `0.1.1` | `71c7cb2d033806632cef1a3678939bf73dc581dd` + [paired patch](patches/eight-gpu-rl-kernel.patch) + [recipe patch](patches/recipe-rl-kernel.patch) + [workspace fix](patches/native-sparse-workspace.patch) |
 | RL-Align/verl | `0.10.0.dev0` | `d154f5aa3d9a5a19210bc2df499db6ef6532db90` + [paired patch](patches/eight-gpu-verl.patch) + [recipe patch](patches/recipe-verl.patch) |
 | Megatron-LM / Core | `0.21.0+97b50bd` | `97b50bdd936022ef58031c35db6d10581c181be0` |
 | vLLM | `0.34.0rc1.dev366+gc07d58dc8` | `c07d58dc82d75f7d1a947b3264b460384ec3e18d` |
@@ -52,6 +52,8 @@ The base image is fixed by registry digest:
 ```text
 vensenmu/rl-kernel@sha256:f3bf76c2d3863bf5b3f6a912d106a6eb2042ad9898c54f60b1e9015d6aeb225f
 ```
+
+The baseline commits and four paired patches remain unchanged. The explicit workspace fix is [RL-Kernel #862](https://github.com/RL-Align/RL-Kernel/pull/862), source commit `58d430f0c9b24c9bab4b4d03e790b42bf0e6a0c2`, temporarily carried as a separately checksummed patch. The recipe requests a checked 16 GiB native sparse workspace budget for both profiles; the 8192-query target backward estimate is about 12.27 GiB. It keeps the same arithmetic kernels, geometry validation and strict acceptance, and does not reserve 16 GiB for small calls.
 
 Patch checksums and the expected final source-tree hashes are enforced by
 [sources.lock.json](sources.lock.json). The generated `runtime.lock.json`

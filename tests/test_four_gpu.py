@@ -58,7 +58,9 @@ def test_four_math_keeps_target_load_and_native_two_gpu_roles():
         1024,
         7168,
     )
-    command, _ = launch(c, "/output", ["a", "b", "c"])
+    command, env = launch(c, "/output", ["a", "b", "c"])
+    assert env["RLK_NATIVE_SPARSE_WORKSPACE_BYTES"] == str(16 << 30)
+    assert any("runtime_env.env_vars.RLK_NATIVE_SPARSE_WORKSPACE_BYTES=" in item for item in command)
     assert "trainer.n_gpus_per_node=2" in command
     assert "actor_rollout_ref.rollout.n_gpus_per_node=2" in command
     assert "reward.custom_reward_function.path=null" in command

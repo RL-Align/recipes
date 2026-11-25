@@ -233,6 +233,7 @@ def launch(c, output, prompts):
         VLLM_ENABLE_V1_MULTIPROCESSING="1",
         VLLM_PP_LAYER_PARTITION="3,1",
         DSV4_TRACE_FORMAT="cas-v1",
+        RLK_NATIVE_SPARSE_WORKSPACE_BYTES=str(16 << 30),
         HYDRA_FULL_ERROR="1",
         RLK_REPLAY_FIXED_CASES=str(data / "replay-fixed-sequences.json"),
     )

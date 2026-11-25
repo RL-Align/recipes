@@ -18,6 +18,7 @@ RUN set -eu; \
     git -C /opt/recipe/RL-Kernel checkout --detach FETCH_HEAD; \
     git -C /opt/recipe/RL-Kernel apply /opt/recipe-patches/eight-gpu-rl-kernel.patch; \
     git -C /opt/recipe/RL-Kernel apply /opt/recipe-patches/recipe-rl-kernel.patch; \
+    git -C /opt/recipe/RL-Kernel apply /opt/recipe-patches/native-sparse-workspace.patch; \
     git -C /opt/recipe/RL-Kernel add -A; \
     test "$(git -C /opt/recipe/RL-Kernel write-tree)" = "$RLK_TREE"; \
     git init /opt/recipe/verl; \

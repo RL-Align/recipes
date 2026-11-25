@@ -54,10 +54,21 @@
     "eight-gpu-rl-kernel.patch": "b05a28730c9691a035fd34e6299fb243b4838d97aa63116d39a2c1894217c5f0",
     "eight-gpu-verl.patch": "b9f8ce101da6f4277247794e02b3a1eddaf0af1748231f2d6a4e4bfccd759127",
     "recipe-verl.patch": "2bdbe697ede9ebb5825bd704445f744fa37bfbd1a91c9eff9a91924a0deef21e",
-    "recipe-rl-kernel.patch": "2a70fee9bb0ff574fd58a480cef2071011f8cdfed69cec9fa45039bdab72800c"
+    "recipe-rl-kernel.patch": "2a70fee9bb0ff574fd58a480cef2071011f8cdfed69cec9fa45039bdab72800c",
+    "native-sparse-workspace.patch": "689030f1e14bb3a62161cc349d2abc3b081f22f7104472cf0f37914a65ddf9b6"
   },
-  "kernel_tree": "b3499983f8b2dd7fe20d8dec30f88df7926a1b97",
+  "kernel_tree": "d68634adf6d233054e69d580d3f296372b0c392f",
   "verl_tree": "80ddb00b21ab53f837591562a34b29700db79594",
   "transformer_engine_source": "b5c00f43283086bf0751f3bf3a179f1e921bbe59",
-  "gfx950_rebuild_reference": "docs/usage/dsv4-mi35x-validation.md at kernel_base"
+  "gfx950_rebuild_reference": "docs/usage/dsv4-mi35x-validation.md at kernel_base",
+  "framework_fixes": [
+    {
+      "project": "RL-Kernel",
+      "base": "71c7cb2d033806632cef1a3678939bf73dc581dd",
+      "source_commit": "58d430f0c9b24c9bab4b4d03e790b42bf0e6a0c2",
+      "patch": "native-sparse-workspace.patch",
+      "sha256": "689030f1e14bb3a62161cc349d2abc3b081f22f7104472cf0f37914a65ddf9b6",
+      "pull_request": "https://github.com/RL-Align/RL-Kernel/pull/862"
+    }
+  ]
 }
