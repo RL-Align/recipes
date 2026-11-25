@@ -1,0 +1,52 @@
+{
+  "N1": {
+    "status": "BLOCKED",
+    "fixed_weight": "NOT_RUN",
+    "updates": 0,
+    "target_updates": 0,
+    "target_load": "NOT_RUN",
+    "reason": "GPU0 root-owned process; SIGTERM EPERM",
+    "dense_dp": 1,
+    "expert_dp": 1
+  },
+  "N2": {
+    "status": "BLOCKED",
+    "fixed_weight": "NOT_RUN",
+    "updates": 0,
+    "target_updates": 0,
+    "target_load": "NOT_RUN",
+    "reason": "GPU0 root-owned process; SIGTERM EPERM",
+    "dense_dp": 1,
+    "expert_dp": 1
+  },
+  "N3": {
+    "status": "BLOCKED",
+    "fixed_weight": "NOT_RUN",
+    "updates": 0,
+    "target_updates": 0,
+    "target_load": "NOT_RUN",
+    "reason": "GPU0 root-owned process; SIGTERM EPERM",
+    "dense_dp": 1,
+    "expert_dp": 1
+  },
+  "N4": {
+    "status": "BLOCKED",
+    "fixed_weight": "NOT_RUN",
+    "updates": 0,
+    "target_updates": 0,
+    "target_load": "NOT_RUN",
+    "reason": "GPU0 root-owned process; SIGTERM EPERM",
+    "dense_dp": 1,
+    "expert_dp": 1
+  },
+  "N5": {
+    "status": "BLOCKED",
+    "fixed_weight": "NOT_RUN",
+    "updates": 0,
+    "target_updates": 0,
+    "target_load": "NOT_RUN",
+    "reason": "Follow-up gate; actor EP4 not implemented/qualified",
+    "dense_dp": 4,
+    "expert_dp": 1
+  }
+}

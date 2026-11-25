@@ -1,0 +1,149 @@
+{
+  "time": "2026-11-25T13:58:02.617155+00:00",
+  "idle": false,
+  "selected_physical_gpus": [
+    0
+  ],
+  "selected_occupant_pids": [
+    3131740
+  ],
+  "cards": {
+    "card0": {
+      "GPU use (%)": "0",
+      "PCI Bus": "0000:83:00.0",
+      "VRAM Total Memory (B)": "205822885888",
+      "VRAM Total Used Memory (B)": "502554624",
+      "Card Series": "AMD Instinct MI300X VF",
+      "Card Model": "0x74b5",
+      "Card Vendor": "Advanced Micro Devices, Inc. [AMD/ATI]",
+      "Card SKU": "M3000108",
+      "Subsystem ID": "0x74a1",
+      "Device Rev": "0x00",
+      "Node ID": "2",
+      "GUID": "21947",
+      "GFX Version": "gfx942"
+    },
+    "card1": {
+      "GPU use (%)": "0",
+      "PCI Bus": "0000:8B:00.0",
+      "VRAM Total Memory (B)": "205822885888",
+      "VRAM Total Used Memory (B)": "299724800",
+      "Card Series": "AMD Instinct MI300X VF",
+      "Card Model": "0x74b5",
+      "Card Vendor": "Advanced Micro Devices, Inc. [AMD/ATI]",
+      "Card SKU": "M3000108",
+      "Subsystem ID": "0x74a1",
+      "Device Rev": "0x00",
+      "Node ID": "3",
+      "GUID": "37820",
+      "GFX Version": "gfx942"
+    },
+    "card2": {
+      "GPU use (%)": "0",
+      "PCI Bus": "0000:93:00.0",
+      "VRAM Total Memory (B)": "205822885888",
+      "VRAM Total Used Memory (B)": "299724800",
+      "Card Series": "AMD Instinct MI300X VF",
+      "Card Model": "0x74b5",
+      "Card Vendor": "Advanced Micro Devices, Inc. [AMD/ATI]",
+      "Card SKU": "M3000108",
+      "Subsystem ID": "0x74a1",
+      "Device Rev": "0x00",
+      "Node ID": "4",
+      "GUID": "39350",
+      "GFX Version": "gfx942"
+    },
+    "card3": {
+      "GPU use (%)": "0",
+      "PCI Bus": "0000:9B:00.0",
+      "VRAM Total Memory (B)": "205822885888",
+      "VRAM Total Used Memory (B)": "299724800",
+      "Card Series": "AMD Instinct MI300X VF",
+      "Card Model": "0x74b5",
+      "Card Vendor": "Advanced Micro Devices, Inc. [AMD/ATI]",
+      "Card SKU": "M3000108",
+      "Subsystem ID": "0x74a1",
+      "Device Rev": "0x00",
+      "Node ID": "5",
+      "GUID": "24497",
+      "GFX Version": "gfx942"
+    },
+    "card4": {
+      "GPU use (%)": "0",
+      "PCI Bus": "0000:A3:00.0",
+      "VRAM Total Memory (B)": "205822885888",
+      "VRAM Total Used Memory (B)": "299712512",
+      "Card Series": "AMD Instinct MI300X VF",
+      "Card Model": "0x74b5",
+      "Card Vendor": "Advanced Micro Devices, Inc. [AMD/ATI]",
+      "Card SKU": "M3000108",
+      "Subsystem ID": "0x74a1",
+      "Device Rev": "0x00",
+      "Node ID": "6",
+      "GUID": "36258",
+      "GFX Version": "gfx942"
+    },
+    "card5": {
+      "GPU use (%)": "0",
+      "PCI Bus": "0000:AB:00.0",
+      "VRAM Total Memory (B)": "205822885888",
+      "VRAM Total Used Memory (B)": "299712512",
+      "Card Series": "AMD Instinct MI300X VF",
+      "Card Model": "0x74b5",
+      "Card Vendor": "Advanced Micro Devices, Inc. [AMD/ATI]",
+      "Card SKU": "M3000108",
+      "Subsystem ID": "0x74a1",
+      "Device Rev": "0x00",
+      "Node ID": "7",
+      "GUID": "19365",
+      "GFX Version": "gfx942"
+    },
+    "card6": {
+      "GPU use (%)": "0",
+      "PCI Bus": "0000:B3:00.0",
+      "VRAM Total Memory (B)": "205822885888",
+      "VRAM Total Used Memory (B)": "299712512",
+      "Card Series": "AMD Instinct MI300X VF",
+      "Card Model": "0x74b5",
+      "Card Vendor": "Advanced Micro Devices, Inc. [AMD/ATI]",
+      "Card SKU": "M3000108",
+      "Subsystem ID": "0x74a1",
+      "Device Rev": "0x00",
+      "Node ID": "8",
+      "GUID": "16815",
+      "GFX Version": "gfx942"
+    },
+    "card7": {
+      "GPU use (%)": "0",
+      "PCI Bus": "0000:BB:00.0",
+      "VRAM Total Memory (B)": "205822885888",
+      "VRAM Total Used Memory (B)": "299712512",
+      "Card Series": "AMD Instinct MI300X VF",
+      "Card Model": "0x74b5",
+      "Card Vendor": "Advanced Micro Devices, Inc. [AMD/ATI]",
+      "Card SKU": "M3000108",
+      "Subsystem ID": "0x74a1",
+      "Device Rev": "0x00",
+      "Node ID": "9",
+      "GUID": "34728",
+      "GFX Version": "gfx942"
+    },
+    "system": {
+      "PID3131740": "python, 1, 201367552, 836, 0"
+    }
+  },
+  "pid_gpu_mapping": "\n\n============================ ROCm System Management Interface ============================\n================================== GPUs Indexed by PID ===================================\nPID 3131740 is using 1 DRM device(s):\n0 \n==========================================================================================\n================================== End of ROCm SMI Log ===================================\n",
+  "processes": [
+    {
+      "pid": 3131740,
+      "ps": "    PID    PPID USER                      STARTED COMMAND\n3131740 2738400 root     Thu Nov 12 14:33:23 2026 /workspace/experiments/d3-single-gpu-20261112-1117/venv-fla/bin/python -u /workspace/experiments/tq-packed-pp-20261112-102123/cooperative-20261112-142903/profile_operator.py --repository /workspace/experiments/tq-packed-pp-20261112-102123/quantizer --model /workspace/models/d3-ultra-TQ4-ccdcfa611649/d3-ultra-TQ4.mfq --implementation /workspace/experiments/tq-packed-pp-20261112-102123/cooperative-20261112-142903\n",
+      "cgroup": "0::/system.slice/docker-badec208aec1442118231db8e03f9c8c40bff4060189880fba6d93a563bc5fd9.scope\n"
+    }
+  ],
+  "external_identity": {
+    "status": "Name:\tpython\nUmask:\t0022\nState:\tS (sleeping)\nTgid:\t3131740\nNgid:\t0\nPid:\t3131740\nPPid:\t2738400\nTracerPid:\t0\nUid:\t0\t0\t0\t0\nGid:\t0\t0\t0\t0\nFDSize:\t64\nGroups:\t0 \nNStgid:\t3131740\t25786\nNSpid:\t3131740\t25786\nNSpgid:\t3131739\t25785\nNSsid:\t3131739\t25785\nKthread:\t0\nVmPeak:\t78695828 kB\nVmSize:\t78499212 kB\nVmLck:\t       0 kB\nVmPin:\t       0 kB\nVmHWM:\t 1467960 kB\nVmRSS:\t 1443520 kB\nRssAnon:\t 1017548 kB\nRssFile:\t  407468 kB\nRssShmem:\t   18504 kB\nVmData:\t26729000 kB\nVmStk:\t     132 kB\nVmExe:\t    2876 kB\nVmLib:\t  666632 kB\nVmPTE:\t    4552 kB\nVmSwap:\t       0 kB\nHugetlbPages:\t       0 kB\nCoreDumping:\t0\nTHP_enabled:\t1\nuntag_mask:\t0xffffffffffffffff\nThreads:\t164\nSigQ:\t1/7740165\nSigPnd:\t0000000000000000\nShdPnd:\t0000000000000000\nSigBlk:\t0000000000000000\nSigIgn:\t0000000001001000\nSigCgt:\t00000001000004fe\nCapInh:\t0000000000000000\nCapPrm:\t00000000a80425fb\nCapEff:\t00000000a80425fb\nCapBnd:\t00000000a80425fb\nCapAmb:\t0000000000000000\nNoNewPrivs:\t0\nSeccomp:\t2\nSeccomp_filters:\t1\nSpeculation_Store_Bypass:\tthread vulnerable\nSpeculationIndirectBranch:\tconditional enabled\nCpus_allowed:\tffffffff,ffffffff,ffffffff,ffffffff,ffffffff\nCpus_allowed_list:\t0-159\nMems_allowed:\t00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000003\nMems_allowed_list:\t0-1\nvoluntary_ctxt_switches:\t98\nnonvoluntary_ctxt_switches:\t88\nx86_Thread_features:\t\nx86_Thread_features_locked:\t\n",
+    "stat": "3131740 (python) S 2738400 3131739 3131739 0 -1 4194304 125530 501507 0 5 390127 1319779 15941 169 20 0 164 0 132312241 80383193088 360592 18446744073709551615 1 1 0 0 0 0 0 16781312 1278 0 0 0 17 84 0 0 0 0 0 0 0 0 0 0 0 0 0\n",
+    "cgroup": "0::/system.slice/docker-badec208aec1442118231db8e03f9c8c40bff4060189880fba6d93a563bc5fd9.scope\n",
+    "cmdline": "/workspace/experiments/d3-single-gpu-20261112-1117/venv-fla/bin/python -u /workspace/experiments/tq-packed-pp-20261112-102123/cooperative-20261112-142903/profile_operator.py --repository /workspace/experiments/tq-packed-pp-20261112-102123/quantizer --model /workspace/models/d3-ultra-TQ4-ccdcfa611649/d3-ultra-TQ4.mfq --implementation /workspace/experiments/tq-packed-pp-20261112-102123/cooperative-20261112-142903 "
+  }
+}

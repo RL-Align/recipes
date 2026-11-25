@@ -1,0 +1,17 @@
+WARNING 11-25 11:10:03 [RL-Kernel]: Core binary extension (_C) unavailable: cannot import name '_C' from 'rl_engine' (/opt/dsv4/RL-Kernel/rl_engine/__init__.py). Falling back to native code.
+WARNING 11-25 11:10:03 [RL-Kernel]: MUSA availability check failed: No module named 'torch_musa'
+INFO 11-25 11:10:03 [RL-Kernel]: RL-Engine initialized with AMD ROCm backend (Version: 7.15.26333)
+INFO 11-25 11:10:03 [RL-Kernel]: KernelRegistry initialized for rocm
+usage: probe_topology.py [-h] --profile PROFILE --model MODEL --output OUTPUT
+                         --role {actor,rollout}
+
+Actual GPU startup diagnostics; never count these as GRPO acceptance. Run
+actor with torchrun and rollout as one driver. Target topology is taken from
+an immutable profile, and every failure keeps its original traceback.
+
+options:
+  -h, --help            show this help message and exit
+  --profile PROFILE
+  --model MODEL
+  --output OUTPUT
+  --role {actor,rollout}

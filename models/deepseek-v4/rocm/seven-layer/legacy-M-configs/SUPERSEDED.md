@@ -1,0 +1,1 @@
+Original M1–M5 actor-TP>1 execution targets were withdrawn on 2026-11-25. These exact historical plans are retained for provenance and must never be auto-launched. Use N1–N4; N5 is gated follow-up. Previous CPU results remain CPU-only evidence.

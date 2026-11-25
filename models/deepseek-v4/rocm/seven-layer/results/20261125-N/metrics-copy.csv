@@ -1,0 +1,6 @@
+group,actor_pp,actor_tp,actor_ep,dense_dp,expert_dp,rollout_tp,status,fixed_weight_status,dataset,recorded_optimizer_steps,independently_verified_effective_updates,independent_verifier,rollout_seconds,rollout_tokens_per_second,rollout_tokens_per_second_per_active_gpu,rollout_tokens_per_second_per_machine_gpu,actor_logprob_seconds,actor_train_seconds,actor_train_tokens_per_second,actor_train_tokens_per_second_per_active_gpu,actor_train_tokens_per_second_per_machine_gpu,synchronization_seconds,unload_restore_seconds,audit_seconds,end_to_end_step_seconds,response_tokens,response_length,reward,kl,expected_tokens,compared_tokens,mismatch_count,mean_abs_diff,max_abs_diff
+N1,2,1,1,1,1,1,BLOCKED,NOT_RUN,copy,0,N/A,NOT_RUN,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+N2,2,1,1,1,1,2,BLOCKED,NOT_RUN,copy,0,N/A,NOT_RUN,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+N3,2,1,1,1,1,4,BLOCKED,NOT_RUN,copy,0,N/A,NOT_RUN,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+N4,2,1,1,1,1,8,BLOCKED,NOT_RUN,copy,0,N/A,NOT_RUN,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+N5,2,1,4,4,1,8,BLOCKED,NOT_RUN,copy,0,N/A,NOT_RUN,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A

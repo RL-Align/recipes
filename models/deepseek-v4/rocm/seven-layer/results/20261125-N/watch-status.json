@@ -1,0 +1,13 @@
+{
+  "time": "2026-11-25T12:15:06.857399+00:00",
+  "pid": 3096386,
+  "status": "WAITING",
+  "local_lock_is_reservation": false,
+  "gpu_idle": false,
+  "disk": {
+    "free": 20652130136064,
+    "used": 20953192665088,
+    "total": 43804362825728
+  },
+  "ready_file_exists": true
+}

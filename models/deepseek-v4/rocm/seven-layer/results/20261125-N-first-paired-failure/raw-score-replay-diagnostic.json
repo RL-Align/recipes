@@ -1,0 +1,282 @@
+{
+  "scope": "diagnostic raw-score replay only; original I64 routing dtype acceptance failed",
+  "status": "FAIL",
+  "snapshot_sha256": "62cbd4407a498f44552b1d2216b1f1a6b7cc5fac105669b4c0a3f8f2e73bebfe",
+  "input_suite_sha256": "61a31ee90248bdc0899b0767680b65f14f94ef681a1d3fed899508c3e13ce525",
+  "expected_tokens": 57,
+  "compared_tokens": 57,
+  "mismatch_count": 30,
+  "mean_abs_diff": 0.0609356729607833,
+  "max_abs_diff": 0.4053459167480469,
+  "rows": [
+    {
+      "id": "boundary-3",
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "id": "boundary-4",
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "id": "boundary-5",
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "id": "boundary-127",
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "id": "boundary-128",
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "id": "boundary-129",
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "id": "boundary-511",
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "id": "boundary-512",
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "id": "boundary-513",
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "id": "boundary-2047",
+      "status": "FAIL",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 3,
+      "mean_abs_diff": 0.07935333251953125,
+      "max_abs_diff": 0.20569229125976562,
+      "finite": true,
+      "first_difference": {
+        "token_index": 0,
+        "left": -17.363468170166016,
+        "right": -17.15777587890625,
+        "left_bits": "0xc18ae862",
+        "right_bits": "0xc1894320"
+      }
+    },
+    {
+      "id": "boundary-2048",
+      "status": "FAIL",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 3,
+      "mean_abs_diff": 0.18962860107421875,
+      "max_abs_diff": 0.4053459167480469,
+      "finite": true,
+      "first_difference": {
+        "token_index": 0,
+        "left": -23.6898136138916,
+        "right": -23.284467697143555,
+        "left_bits": "0xc1bd84bd",
+        "right_bits": "0xc1ba4697"
+      }
+    },
+    {
+      "id": "boundary-2049",
+      "status": "FAIL",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 3,
+      "mean_abs_diff": 0.10245259602864583,
+      "max_abs_diff": 0.21420860290527344,
+      "finite": true,
+      "first_difference": {
+        "token_index": 0,
+        "left": -20.966468811035156,
+        "right": -20.752260208129883,
+        "left_bits": "0xc1a7bb54",
+        "right_bits": "0xc1a604a1"
+      }
+    },
+    {
+      "id": "boundary-2177",
+      "status": "FAIL",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 3,
+      "mean_abs_diff": 0.15559832255045572,
+      "max_abs_diff": 0.24850082397460938,
+      "finite": true,
+      "first_difference": {
+        "token_index": 0,
+        "left": -16.989133834838867,
+        "right": -17.237634658813477,
+        "left_bits": "0xc187e9bf",
+        "right_bits": "0xc189e6ad"
+      }
+    },
+    {
+      "id": "AB-0",
+      "status": "FAIL",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 3,
+      "mean_abs_diff": 0.05464998881022135,
+      "max_abs_diff": 0.10326576232910156,
+      "finite": true,
+      "first_difference": {
+        "token_index": 0,
+        "left": -22.43272590637207,
+        "right": -22.48061752319336,
+        "left_bits": "0xc1b37639",
+        "right_bits": "0xc1b3d84e"
+      }
+    },
+    {
+      "id": "AB-1",
+      "status": "FAIL",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 3,
+      "mean_abs_diff": 0.15559832255045572,
+      "max_abs_diff": 0.24850082397460938,
+      "finite": true,
+      "first_difference": {
+        "token_index": 0,
+        "left": -16.989133834838867,
+        "right": -17.237634658813477,
+        "left_bits": "0xc187e9bf",
+        "right_bits": "0xc189e6ad"
+      }
+    },
+    {
+      "id": "BA-0",
+      "status": "FAIL",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 3,
+      "mean_abs_diff": 0.15559832255045572,
+      "max_abs_diff": 0.24850082397460938,
+      "finite": true,
+      "first_difference": {
+        "token_index": 0,
+        "left": -16.989133834838867,
+        "right": -17.237634658813477,
+        "left_bits": "0xc187e9bf",
+        "right_bits": "0xc189e6ad"
+      }
+    },
+    {
+      "id": "BA-1",
+      "status": "FAIL",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 3,
+      "mean_abs_diff": 0.05464998881022135,
+      "max_abs_diff": 0.10326576232910156,
+      "finite": true,
+      "first_difference": {
+        "token_index": 0,
+        "left": -22.43272590637207,
+        "right": -22.48061752319336,
+        "left_bits": "0xc1b37639",
+        "right_bits": "0xc1b3d84e"
+      }
+    },
+    {
+      "id": "AB-repeat-0",
+      "status": "FAIL",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 3,
+      "mean_abs_diff": 0.05464998881022135,
+      "max_abs_diff": 0.10326576232910156,
+      "finite": true,
+      "first_difference": {
+        "token_index": 0,
+        "left": -22.43272590637207,
+        "right": -22.48061752319336,
+        "left_bits": "0xc1b37639",
+        "right_bits": "0xc1b3d84e"
+      }
+    },
+    {
+      "id": "AB-repeat-1",
+      "status": "FAIL",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 3,
+      "mean_abs_diff": 0.15559832255045572,
+      "max_abs_diff": 0.24850082397460938,
+      "finite": true,
+      "first_difference": {
+        "token_index": 0,
+        "left": -16.989133834838867,
+        "right": -17.237634658813477,
+        "left_bits": "0xc187e9bf",
+        "right_bits": "0xc189e6ad"
+      }
+    }
+  ]
+}

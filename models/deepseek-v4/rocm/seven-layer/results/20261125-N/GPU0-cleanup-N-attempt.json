@@ -1,0 +1,14 @@
+{
+  "time": "2026-11-25T11:36:04.198159+00:00",
+  "targets": [
+    {
+      "pid": 3131740,
+      "devices": [
+        0
+      ],
+      "identity": "    PID    PPID USER                      STARTED COMMAND\n3131740 2738400 root     Thu Nov 12 14:33:23 2026 /workspace/experiments/d3-single-gpu-20261112-1117/venv-fla/bin/python -u /workspace/experiments/tq-packed-pp-20261112-102123/cooperative-20261112-142903/profile_operator.py --repository /workspace/experiments/tq-packed-pp-20261112-102123/quantizer --model /workspace/models/d3-ultra-TQ4-ccdcfa611649/d3-ultra-TQ4.mfq --implementation /workspace/experiments/tq-packed-pp-20261112-102123/cooperative-20261112-142903\n",
+      "cgroup": "0::/system.slice/docker-badec208aec1442118231db8e03f9c8c40bff4060189880fba6d93a563bc5fd9.scope\n",
+      "action": "[Errno 1] Operation not permitted"
+    }
+  ]
+}

@@ -1,0 +1,628 @@
+{
+  "rank": 1,
+  "actual_model_class": "megatron.core.models.hybrid.hybrid_model.HybridModel",
+  "actual_model_source": "/opt/dsv4/Megatron-LM/megatron/core/models/hybrid/hybrid_model.py",
+  "trainable_inventory": {
+    "decoder.hc_head_fn": {
+      "shape": [
+        4,
+        16384
+      ],
+      "dtype": "torch.float32",
+      "elements": 65536
+    },
+    "decoder.hc_head_base": {
+      "shape": [
+        4
+      ],
+      "dtype": "torch.float32",
+      "elements": 4
+    },
+    "decoder.hc_head_scale": {
+      "shape": [
+        1
+      ],
+      "dtype": "torch.float32",
+      "elements": 1
+    },
+    "decoder.layers.0.inner_layer.input_layernorm.weight": {
+      "shape": [
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 4096
+    },
+    "decoder.layers.0.inner_layer.self_attention.core_attention.attn_sink": {
+      "shape": [
+        64
+      ],
+      "dtype": "torch.float32",
+      "elements": 64
+    },
+    "decoder.layers.0.inner_layer.self_attention.core_attention.compressor.ape": {
+      "shape": [
+        4,
+        1024
+      ],
+      "dtype": "torch.float32",
+      "elements": 4096
+    },
+    "decoder.layers.0.inner_layer.self_attention.core_attention.compressor.linear_wkv.weight": {
+      "shape": [
+        1024,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 4194304
+    },
+    "decoder.layers.0.inner_layer.self_attention.core_attention.compressor.linear_wgate.weight": {
+      "shape": [
+        1024,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 4194304
+    },
+    "decoder.layers.0.inner_layer.self_attention.core_attention.compressor.norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 512
+    },
+    "decoder.layers.0.inner_layer.self_attention.core_attention.indexer.linear_weights_proj.weight": {
+      "shape": [
+        64,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 262144
+    },
+    "decoder.layers.0.inner_layer.self_attention.core_attention.indexer.compressor.ape": {
+      "shape": [
+        4,
+        256
+      ],
+      "dtype": "torch.float32",
+      "elements": 1024
+    },
+    "decoder.layers.0.inner_layer.self_attention.core_attention.indexer.compressor.linear_wkv.weight": {
+      "shape": [
+        256,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 1048576
+    },
+    "decoder.layers.0.inner_layer.self_attention.core_attention.indexer.compressor.linear_wgate.weight": {
+      "shape": [
+        256,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 1048576
+    },
+    "decoder.layers.0.inner_layer.self_attention.core_attention.indexer.compressor.norm.weight": {
+      "shape": [
+        128
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 128
+    },
+    "decoder.layers.0.inner_layer.self_attention.kv_layernorm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 512
+    },
+    "decoder.layers.0.inner_layer.self_attention.q_layernorm.weight": {
+      "shape": [
+        1024
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 1024
+    },
+    "decoder.layers.0.hyper_connection.alpha_pre": {
+      "shape": [
+        1
+      ],
+      "dtype": "torch.float32",
+      "elements": 1
+    },
+    "decoder.layers.0.hyper_connection.alpha_post": {
+      "shape": [
+        1
+      ],
+      "dtype": "torch.float32",
+      "elements": 1
+    },
+    "decoder.layers.0.hyper_connection.alpha_res": {
+      "shape": [
+        1
+      ],
+      "dtype": "torch.float32",
+      "elements": 1
+    },
+    "decoder.layers.0.hyper_connection.bias": {
+      "shape": [
+        24
+      ],
+      "dtype": "torch.float32",
+      "elements": 24
+    },
+    "decoder.layers.0.hyper_connection.mapping_proj.weight": {
+      "shape": [
+        24,
+        16384
+      ],
+      "dtype": "torch.float32",
+      "elements": 393216
+    },
+    "decoder.layers.1.inner_layer.pre_mlp_layernorm.weight": {
+      "shape": [
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 4096
+    },
+    "decoder.layers.1.inner_layer.mlp.router.weight": {
+      "shape": [
+        256,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 1048576
+    },
+    "decoder.layers.1.hyper_connection.alpha_pre": {
+      "shape": [
+        1
+      ],
+      "dtype": "torch.float32",
+      "elements": 1
+    },
+    "decoder.layers.1.hyper_connection.alpha_post": {
+      "shape": [
+        1
+      ],
+      "dtype": "torch.float32",
+      "elements": 1
+    },
+    "decoder.layers.1.hyper_connection.alpha_res": {
+      "shape": [
+        1
+      ],
+      "dtype": "torch.float32",
+      "elements": 1
+    },
+    "decoder.layers.1.hyper_connection.bias": {
+      "shape": [
+        24
+      ],
+      "dtype": "torch.float32",
+      "elements": 24
+    },
+    "decoder.layers.1.hyper_connection.mapping_proj.weight": {
+      "shape": [
+        24,
+        16384
+      ],
+      "dtype": "torch.float32",
+      "elements": 393216
+    },
+    "decoder.layers.2.inner_layer.input_layernorm.weight": {
+      "shape": [
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 4096
+    },
+    "decoder.layers.2.inner_layer.self_attention.core_attention.attn_sink": {
+      "shape": [
+        64
+      ],
+      "dtype": "torch.float32",
+      "elements": 64
+    },
+    "decoder.layers.2.inner_layer.self_attention.core_attention.compressor.ape": {
+      "shape": [
+        128,
+        512
+      ],
+      "dtype": "torch.float32",
+      "elements": 65536
+    },
+    "decoder.layers.2.inner_layer.self_attention.core_attention.compressor.linear_wkv.weight": {
+      "shape": [
+        512,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 2097152
+    },
+    "decoder.layers.2.inner_layer.self_attention.core_attention.compressor.linear_wgate.weight": {
+      "shape": [
+        512,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 2097152
+    },
+    "decoder.layers.2.inner_layer.self_attention.core_attention.compressor.norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 512
+    },
+    "decoder.layers.2.inner_layer.self_attention.kv_layernorm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 512
+    },
+    "decoder.layers.2.inner_layer.self_attention.q_layernorm.weight": {
+      "shape": [
+        1024
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 1024
+    },
+    "decoder.layers.2.hyper_connection.alpha_pre": {
+      "shape": [
+        1
+      ],
+      "dtype": "torch.float32",
+      "elements": 1
+    },
+    "decoder.layers.2.hyper_connection.alpha_post": {
+      "shape": [
+        1
+      ],
+      "dtype": "torch.float32",
+      "elements": 1
+    },
+    "decoder.layers.2.hyper_connection.alpha_res": {
+      "shape": [
+        1
+      ],
+      "dtype": "torch.float32",
+      "elements": 1
+    },
+    "decoder.layers.2.hyper_connection.bias": {
+      "shape": [
+        24
+      ],
+      "dtype": "torch.float32",
+      "elements": 24
+    },
+    "decoder.layers.2.hyper_connection.mapping_proj.weight": {
+      "shape": [
+        24,
+        16384
+      ],
+      "dtype": "torch.float32",
+      "elements": 393216
+    },
+    "decoder.layers.3.inner_layer.pre_mlp_layernorm.weight": {
+      "shape": [
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 4096
+    },
+    "decoder.layers.3.inner_layer.mlp.router.weight": {
+      "shape": [
+        256,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 1048576
+    },
+    "decoder.layers.3.hyper_connection.alpha_pre": {
+      "shape": [
+        1
+      ],
+      "dtype": "torch.float32",
+      "elements": 1
+    },
+    "decoder.layers.3.hyper_connection.alpha_post": {
+      "shape": [
+        1
+      ],
+      "dtype": "torch.float32",
+      "elements": 1
+    },
+    "decoder.layers.3.hyper_connection.alpha_res": {
+      "shape": [
+        1
+      ],
+      "dtype": "torch.float32",
+      "elements": 1
+    },
+    "decoder.layers.3.hyper_connection.bias": {
+      "shape": [
+        24
+      ],
+      "dtype": "torch.float32",
+      "elements": 24
+    },
+    "decoder.layers.3.hyper_connection.mapping_proj.weight": {
+      "shape": [
+        24,
+        16384
+      ],
+      "dtype": "torch.float32",
+      "elements": 393216
+    },
+    "decoder.layers.4.inner_layer.input_layernorm.weight": {
+      "shape": [
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 4096
+    },
+    "decoder.layers.4.inner_layer.self_attention.core_attention.attn_sink": {
+      "shape": [
+        64
+      ],
+      "dtype": "torch.float32",
+      "elements": 64
+    },
+    "decoder.layers.4.inner_layer.self_attention.core_attention.compressor.ape": {
+      "shape": [
+        4,
+        1024
+      ],
+      "dtype": "torch.float32",
+      "elements": 4096
+    },
+    "decoder.layers.4.inner_layer.self_attention.core_attention.compressor.linear_wkv.weight": {
+      "shape": [
+        1024,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 4194304
+    },
+    "decoder.layers.4.inner_layer.self_attention.core_attention.compressor.linear_wgate.weight": {
+      "shape": [
+        1024,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 4194304
+    },
+    "decoder.layers.4.inner_layer.self_attention.core_attention.compressor.norm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 512
+    },
+    "decoder.layers.4.inner_layer.self_attention.core_attention.indexer.linear_weights_proj.weight": {
+      "shape": [
+        64,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 262144
+    },
+    "decoder.layers.4.inner_layer.self_attention.core_attention.indexer.compressor.ape": {
+      "shape": [
+        4,
+        256
+      ],
+      "dtype": "torch.float32",
+      "elements": 1024
+    },
+    "decoder.layers.4.inner_layer.self_attention.core_attention.indexer.compressor.linear_wkv.weight": {
+      "shape": [
+        256,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 1048576
+    },
+    "decoder.layers.4.inner_layer.self_attention.core_attention.indexer.compressor.linear_wgate.weight": {
+      "shape": [
+        256,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 1048576
+    },
+    "decoder.layers.4.inner_layer.self_attention.core_attention.indexer.compressor.norm.weight": {
+      "shape": [
+        128
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 128
+    },
+    "decoder.layers.4.inner_layer.self_attention.kv_layernorm.weight": {
+      "shape": [
+        512
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 512
+    },
+    "decoder.layers.4.inner_layer.self_attention.q_layernorm.weight": {
+      "shape": [
+        1024
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 1024
+    },
+    "decoder.layers.4.hyper_connection.alpha_pre": {
+      "shape": [
+        1
+      ],
+      "dtype": "torch.float32",
+      "elements": 1
+    },
+    "decoder.layers.4.hyper_connection.alpha_post": {
+      "shape": [
+        1
+      ],
+      "dtype": "torch.float32",
+      "elements": 1
+    },
+    "decoder.layers.4.hyper_connection.alpha_res": {
+      "shape": [
+        1
+      ],
+      "dtype": "torch.float32",
+      "elements": 1
+    },
+    "decoder.layers.4.hyper_connection.bias": {
+      "shape": [
+        24
+      ],
+      "dtype": "torch.float32",
+      "elements": 24
+    },
+    "decoder.layers.4.hyper_connection.mapping_proj.weight": {
+      "shape": [
+        24,
+        16384
+      ],
+      "dtype": "torch.float32",
+      "elements": 393216
+    },
+    "decoder.layers.5.inner_layer.pre_mlp_layernorm.weight": {
+      "shape": [
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 4096
+    },
+    "decoder.layers.5.inner_layer.mlp.router.weight": {
+      "shape": [
+        256,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 1048576
+    },
+    "decoder.layers.5.hyper_connection.alpha_pre": {
+      "shape": [
+        1
+      ],
+      "dtype": "torch.float32",
+      "elements": 1
+    },
+    "decoder.layers.5.hyper_connection.alpha_post": {
+      "shape": [
+        1
+      ],
+      "dtype": "torch.float32",
+      "elements": 1
+    },
+    "decoder.layers.5.hyper_connection.alpha_res": {
+      "shape": [
+        1
+      ],
+      "dtype": "torch.float32",
+      "elements": 1
+    },
+    "decoder.layers.5.hyper_connection.bias": {
+      "shape": [
+        24
+      ],
+      "dtype": "torch.float32",
+      "elements": 24
+    },
+    "decoder.layers.5.hyper_connection.mapping_proj.weight": {
+      "shape": [
+        24,
+        16384
+      ],
+      "dtype": "torch.float32",
+      "elements": 393216
+    },
+    "decoder.final_norm.weight": {
+      "shape": [
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 4096
+    },
+    "output_layer.weight": {
+      "shape": [
+        129280,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "elements": 529530880
+    }
+  },
+  "pid": 16,
+  "source_identity": {
+    "role": "actor",
+    "pid": 16,
+    "hostname": "10",
+    "node_id": "10",
+    "process_instance": "28055cd430264b0999b9a733e4577ad7",
+    "projects": {
+      "verl": {
+        "sha": "6b73e92f21938e8b36e376f1e4b2be1fd4073431",
+        "url": "https://github.com/RL-Align/verl.git",
+        "import_path": "/opt/dsv4/verl/verl/__init__.py",
+        "dirty": false,
+        "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "version": "0.10.0.dev0"
+      },
+      "RL-Kernel": {
+        "sha": "bda405c538a608edce91619bff0b915069992fdb",
+        "url": "https://github.com/RL-Align/RL-Kernel.git",
+        "import_path": "/opt/dsv4/RL-Kernel/rl_engine/__init__.py",
+        "dirty": false,
+        "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "version": "0.1.1"
+      },
+      "vllm": {
+        "sha": "c07d58dc82d75f7d1a947b3264b460384ec3e18d",
+        "url": "https://github.com/vllm-project/vllm.git",
+        "import_path": "/opt/dsv4/vllm/vllm/__init__.py",
+        "dirty": false,
+        "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "version": "0.34.0rc1.dev366+gc07d58dc8"
+      },
+      "Megatron-LM": {
+        "sha": "97b50bdd936022ef58031c35db6d10581c181be0",
+        "url": "https://github.com/NVIDIA/Megatron-LM.git",
+        "import_path": "/opt/dsv4/Megatron-LM/megatron/core/__init__.py",
+        "dirty": false,
+        "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "version": "0.21.0+97b50bd"
+      }
+    },
+    "dependencies": {
+      "megatron-bridge": "0.7.0",
+      "torch": "2.13.0+rocm10.0.0",
+      "triton": "3.8.0+git669b31ac",
+      "amd-aiter": "0.1.29",
+      "ray": "2.60.0",
+      "TransferQueue": "0.1.11"
+    },
+    "hip": "7.15.26333",
+    "ray_accelerator_ids": null,
+    "visibility": {
+      "HIP_VISIBLE_DEVICES": null,
+      "CUDA_VISIBLE_DEVICES": "0,1",
+      "ROCR_VISIBLE_DEVICES": null
+    }
+  },
+  "device_identity": {
+    "logical_gpu": 1,
+    "pci_bus_id": "0000:8b:00.0",
+    "architecture": "gfx942:sramecc+:xnack-",
+    "device_name": "AMD Instinct MI300X VF"
+  },
+  "original_layer_ids": [
+    4,
+    5,
+    6
+  ]
+}

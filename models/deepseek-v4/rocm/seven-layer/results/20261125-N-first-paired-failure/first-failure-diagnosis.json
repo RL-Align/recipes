@@ -1,0 +1,10 @@
+{
+  "time": "2026-11-25T14:28:24.257454+00:00",
+  "attempt": "runs-N/20261125T142057Z-ad7e3233",
+  "expected_tokens": 57,
+  "compared_tokens": 57,
+  "mismatch_count": 30,
+  "max_abs_diff": 0.4053459167480469,
+  "metadata_failure": "Original I64 tid2eid narrowed to I32 by native default storage",
+  "action": "stop only own later phases for common loader fix and first-difference trace"
+}

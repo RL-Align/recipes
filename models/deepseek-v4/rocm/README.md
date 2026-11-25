@@ -7,6 +7,9 @@ Nonquantized parameters are trained; packed FP4/FP8 weights stay frozen.
 
 ## Configurations
 
+[Seven-layer cross-TP/PP/EP experimental profile](seven-layer/README.md) is separate
+from the historical four-layer recipe below. Its complete GPU matrix is not validated.
+
 | Configuration | Actor | Rollout |
 | --- | --- | --- |
 | [Single node · 8 GPUs](configs/single-node-8gpu.json) | GPUs 0–3: PP2 × DP2 | GPUs 4–7: two PP2 instances |

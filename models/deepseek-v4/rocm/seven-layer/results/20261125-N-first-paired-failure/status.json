@@ -1,0 +1,42 @@
+{
+  "groups": {
+    "N1": {
+      "fixed_weight": "FAIL",
+      "valid_grpo_updates": 0,
+      "target_load": "NOT_RUN",
+      "independent_verifier": "FAIL"
+    },
+    "N2": {
+      "fixed_weight": "NOT_RUN",
+      "valid_grpo_updates": 0,
+      "target_load": "NOT_RUN",
+      "independent_verifier": "NOT_RUN"
+    },
+    "N3": {
+      "fixed_weight": "NOT_RUN",
+      "valid_grpo_updates": 0,
+      "target_load": "NOT_RUN",
+      "independent_verifier": "NOT_RUN"
+    },
+    "N4": {
+      "fixed_weight": "NOT_RUN",
+      "valid_grpo_updates": 0,
+      "target_load": "NOT_RUN",
+      "independent_verifier": "NOT_RUN"
+    },
+    "N5": {
+      "fixed_weight": "NOT_RUN",
+      "valid_grpo_updates": 0,
+      "target_load": "NOT_RUN",
+      "independent_verifier": "NOT_RUN"
+    }
+  },
+  "scope": "Preserved first completed paired GPU scoring failure; newer runtime rerun ongoing",
+  "raw_score_diagnostic": {
+    "expected_tokens": 57,
+    "compared_tokens": 57,
+    "mismatch_count": 30,
+    "mean_abs_diff": 0.0609356729607833,
+    "max_abs_diff": 0.4053459167480469
+  }
+}

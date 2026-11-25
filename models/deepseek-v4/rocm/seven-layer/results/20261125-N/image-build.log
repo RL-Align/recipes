@@ -1,0 +1,86 @@
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.68kB done
+#1 WARN: InvalidDefaultArgInFrom: Default value for ARG ${BASE_IMAGE} results in empty or invalid base image name (line 2)
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/vensenmu/rl-kernel@sha256:f3bf76c2d3863bf5b3f6a912d106a6eb2042ad9898c54f60b1e9015d6aeb225f
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 174B done
+#3 DONE 0.0s
+
+#4 [1/8] FROM docker.io/vensenmu/rl-kernel@sha256:f3bf76c2d3863bf5b3f6a912d106a6eb2042ad9898c54f60b1e9015d6aeb225f
+#4 resolve docker.io/vensenmu/rl-kernel@sha256:f3bf76c2d3863bf5b3f6a912d106a6eb2042ad9898c54f60b1e9015d6aeb225f 0.0s done
+#4 CACHED
+
+#5 [internal] load build context
+#5 transferring context: 34.27kB done
+#5 DONE 0.0s
+
+#6 [2/8] RUN set -eu;     rm -rf /opt/dsv4/RL-Kernel /opt/dsv4/verl;     for repo in RL-Kernel verl; do       if [ "$repo" = RL-Kernel ]; then source_sha="94f09c3b948bf59d396b5492d20853c1c52bfbad"; source_tree="075353e8f208d8a49cfaae32ef18404365c08b96";       else source_sha="507f46e1e1a8fe9cb4c505bda95df63f0d525b2b"; source_tree="460f533c2e764ce7f05107d83e22c6e77f656c06"; fi;       git init "/opt/dsv4/$repo";       git -C "/opt/dsv4/$repo" remote add origin "https://github.com/RL-Align/$repo.git";       git -C "/opt/dsv4/$repo" fetch --depth=1 origin "$source_sha";       git -C "/opt/dsv4/$repo" checkout --detach FETCH_HEAD;       test "$(git -C "/opt/dsv4/$repo" rev-parse HEAD)" = "$source_sha";       test "$(git -C "/opt/dsv4/$repo" rev-parse HEAD^{tree})" = "$source_tree";       test -z "$(git -C "/opt/dsv4/$repo" status --porcelain)";     done
+#6 0.309 hint: Using 'master' as the name for the initial branch. This default branch name
+#6 0.309 hint: is subject to change. To configure the initial branch name to use in all
+#6 0.309 hint: of your new repositories, which will suppress this warning, call:
+#6 0.309 hint: 
+#6 0.309 hint: 	git config --global init.defaultBranch <name>
+#6 0.309 hint: 
+#6 0.309 hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+#6 0.309 hint: 'development'. The just-created branch can be renamed via this command:
+#6 0.309 hint: 
+#6 0.309 hint: 	git branch -m <name>
+#6 0.310 Initialized empty Git repository in /opt/dsv4/RL-Kernel/.git/
+#6 1.207 From https://github.com/RL-Align/RL-Kernel
+#6 1.207  * branch            94f09c3b948bf59d396b5492d20853c1c52bfbad -> FETCH_HEAD
+#6 1.391 HEAD is now at 94f09c3 Support experimental DSV4 PP1 rollout TP shards and original-vocabulary scores
+#6 1.494 hint: Using 'master' as the name for the initial branch. This default branch name
+#6 1.494 hint: is subject to change. To configure the initial branch name to use in all
+#6 1.494 hint: of your new repositories, which will suppress this warning, call:
+#6 1.494 hint: 
+#6 1.494 hint: 	git config --global init.defaultBranch <name>
+#6 1.494 hint: 
+#6 1.494 hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+#6 1.494 hint: 'development'. The just-created branch can be renamed via this command:
+#6 1.494 hint: 
+#6 1.494 hint: 	git branch -m <name>
+#6 1.494 Initialized empty Git repository in /opt/dsv4/verl/.git/
+#6 2.356 From https://github.com/RL-Align/verl
+#6 2.356  * branch            507f46e1e1a8fe9cb4c505bda95df63f0d525b2b -> FETCH_HEAD
+#6 2.448 HEAD is now at 507f46e Implement experimental actor-TP1 seven-layer native phase execution and recovery
+#6 DONE 2.6s
+
+#7 [3/8] COPY scripts/seven_layer /opt/recipes/scripts/seven_layer
+#7 DONE 0.0s
+
+#8 [4/8] COPY scripts/node.py /opt/recipes/scripts/node.py
+#8 DONE 0.0s
+
+#9 [5/8] COPY scripts/binary_manifest.py /opt/recipes/scripts/binary_manifest.py
+#9 DONE 0.0s
+
+#10 [6/8] COPY models/deepseek-v4/rocm/seven-layer /opt/recipes/models/deepseek-v4/rocm/seven-layer
+#10 DONE 0.0s
+
+#11 [7/8] RUN test -r /opt/dsv4/lib/rlk-isolated-kfd.so &&     mkdir -p /opt/recipe-build &&     python /opt/recipes/scripts/binary_manifest.py > /opt/recipe-build/binaries.json
+#11 DONE 0.7s
+
+#12 [8/8] WORKDIR /opt/recipes
+#12 DONE 0.0s
+
+#13 exporting to image
+#13 exporting layers
+#13 exporting layers 1.9s done
+#13 exporting manifest sha256:21980046d620bfae759467895711da621f23bc02defca6e2f6c376adfc2ea33e done
+#13 exporting config sha256:1eebfad787cc6cdaa469c96ee6f9a4a8e17ed16f243e16a9f2c34762068c7ebb done
+#13 exporting attestation manifest sha256:a39d1ed3b3be8f80df58366256b70c8b2621e607a89916b109f69969c9d706dc done
+#13 exporting manifest list sha256:8f1f79c09146d86474f2568a22c61bb1fe60fabe621ce1399a40ef18c9243932 done
+#13 naming to docker.io/rl-align/dsv4-seven-layer:actor-tp1-73015732f808 done
+#13 unpacking to docker.io/rl-align/dsv4-seven-layer:actor-tp1-73015732f808
+#13 unpacking to docker.io/rl-align/dsv4-seven-layer:actor-tp1-73015732f808 0.8s done
+#13 DONE 2.9s
+
+ [33m1 warning found (use docker --debug to expand):
+[0m - InvalidDefaultArgInFrom: Default value for ARG ${BASE_IMAGE} results in empty or invalid base image name (line 2)
+/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/runtime/runtime-73015732f808.lock.json

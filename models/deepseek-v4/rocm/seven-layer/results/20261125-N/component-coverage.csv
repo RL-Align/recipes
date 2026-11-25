@@ -1,0 +1,13 @@
+component,N1,N2,N3,N4,N5,evidence
+Attention types / compression types,NOT_COVERED,NOT_COVERED,NOT_COVERED,NOT_COVERED,NOT_COVERED,No GPU model phase executed
+Compression state and boundaries,NOT_COVERED,NOT_COVERED,NOT_COVERED,NOT_COVERED,NOT_COVERED,No GPU model phase executed
+Indexer / Top-k,NOT_COVERED,NOT_COVERED,NOT_COVERED,NOT_COVERED,NOT_COVERED,No GPU model phase executed
+Hash routing and later learned routing,NOT_COVERED,NOT_COVERED,NOT_COVERED,NOT_COVERED,NOT_COVERED,No GPU model phase executed
+Routed experts,NOT_COVERED,NOT_COVERED,NOT_COVERED,NOT_COVERED,NOT_COVERED,No GPU model phase executed
+Shared experts,NOT_COVERED,NOT_COVERED,NOT_COVERED,NOT_COVERED,NOT_COVERED,No GPU model phase executed
+mHC,NOT_COVERED,NOT_COVERED,NOT_COVERED,NOT_COVERED,NOT_COVERED,No GPU model phase executed
+Embedding,NOT_COVERED,NOT_COVERED,NOT_COVERED,NOT_COVERED,NOT_COVERED,No GPU model phase executed
+Output head and normalization,NOT_COVERED,NOT_COVERED,NOT_COVERED,NOT_COVERED,NOT_COVERED,No GPU model phase executed
+Effective backward,NOT_COVERED,NOT_COVERED,NOT_COVERED,NOT_COVERED,NOT_COVERED,No GPU model phase executed
+PP forward/backward transfers,NOT_COVERED,NOT_COVERED,NOT_COVERED,NOT_COVERED,NOT_COVERED,No GPU model phase executed
+N5 EP4 communication,NOT_COVERED,NOT_COVERED,NOT_COVERED,NOT_COVERED,NOT_COVERED,No GPU model phase executed

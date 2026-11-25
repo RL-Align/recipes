@@ -1,0 +1,32 @@
+{
+  "time": "2026-11-25T11:22:57.580178+00:00",
+  "old_status": {
+    "time": "2026-11-25T11:22:37.590280+00:00",
+    "pid": 3086958,
+    "status": "WAITING",
+    "local_lock_is_reservation": false,
+    "gpu_idle": false,
+    "disk": {
+      "free": 20652222042112,
+      "used": 20953100759040,
+      "total": 43804362825728
+    },
+    "ready_file_exists": true
+  },
+  "ready_removed": true,
+  "identity": "    PID    PPID USER                      STARTED COMMAND\n3086958 3086957 rl-kern+ Wed Nov 25 10:53:48 2026 python3 -u /scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/recipes/scripts/seven_layer/watch.py --output /scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/evidence/watch --ready /scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/ready.json\n",
+  "monitor": "sent SIGTERM to confirmed old watcher only",
+  "status.json": {
+    "time": "2026-11-25T11:22:37.590280+00:00",
+    "pid": 3086958,
+    "status": "WAITING",
+    "local_lock_is_reservation": false,
+    "gpu_idle": false,
+    "disk": {
+      "free": 20652222042112,
+      "used": 20953100759040,
+      "total": 43804362825728
+    },
+    "ready_file_exists": true
+  }
+}

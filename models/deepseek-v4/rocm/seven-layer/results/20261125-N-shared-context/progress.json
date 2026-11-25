@@ -1,0 +1,62 @@
+{
+  "time": "2026-11-25T14:24:54.819361+00:00",
+  "experiment": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z",
+  "hardware": "8x MI300X VF gfx942",
+  "environment": "shared context exception on GPU0; not exclusive performance",
+  "single_gpu0_health": "PASS",
+  "eight_rank_communication": "PASS",
+  "actor_fixed_forward": {
+    "samples": 19,
+    "response_tokens": 57,
+    "status": "SCORES_SAVED; full actor/rollout comparison pending"
+  },
+  "groups": {
+    "N1": {
+      "status": "RUNNING",
+      "fixed_weight": "NOT_YET_ACCEPTED",
+      "effective_updates": 0,
+      "target_updates": 0,
+      "target_load": "NOT_RUN",
+      "dense_dp": 1,
+      "expert_dp": 1
+    },
+    "N2": {
+      "status": "PLANNED",
+      "fixed_weight": "NOT_YET_ACCEPTED",
+      "effective_updates": 0,
+      "target_updates": 0,
+      "target_load": "NOT_RUN",
+      "dense_dp": 1,
+      "expert_dp": 1
+    },
+    "N3": {
+      "status": "PLANNED",
+      "fixed_weight": "NOT_YET_ACCEPTED",
+      "effective_updates": 0,
+      "target_updates": 0,
+      "target_load": "NOT_RUN",
+      "dense_dp": 1,
+      "expert_dp": 1
+    },
+    "N4": {
+      "status": "PLANNED",
+      "fixed_weight": "NOT_YET_ACCEPTED",
+      "effective_updates": 0,
+      "target_updates": 0,
+      "target_load": "NOT_RUN",
+      "dense_dp": 1,
+      "expert_dp": 1
+    },
+    "N5": {
+      "status": "IMPLEMENTING",
+      "fixed_weight": "NOT_YET_ACCEPTED",
+      "effective_updates": 0,
+      "target_updates": 0,
+      "target_load": "NOT_RUN",
+      "dense_dp": 4,
+      "expert_dp": 1
+    }
+  },
+  "active_attempt": "runs-N/20261125T142057Z-ad7e3233",
+  "N5_scope": "Original packed 64/256-expert local loader component implemented and CPU-checked; EP4 dispatch/backward/sync not admitted"
+}

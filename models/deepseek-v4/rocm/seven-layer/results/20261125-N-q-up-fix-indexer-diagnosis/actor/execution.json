@@ -1,0 +1,15 @@
+{
+  "action": "actor-score",
+  "version": 0,
+  "container_id": "ab9f89f6d5a2ab769075425bbf950af5dc35d07b95f3d4a18f527d58db32a328",
+  "returncode": 0,
+  "seconds": 97.14963156497106,
+  "active_gpus": 2,
+  "selected_physical_gpus": [
+    0,
+    1
+  ],
+  "selected_pool_gpus": 8,
+  "machine_gpus": 8,
+  "status": "EXECUTED"
+}

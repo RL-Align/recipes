@@ -1,0 +1,202 @@
+{
+  "status": "PASS",
+  "scope": "actor-only repeat across physical GPU4/5 and GPU0/1; NOT train-rollout acceptance",
+  "expected_tokens": 57,
+  "compared_tokens": 57,
+  "mismatch_count": 0,
+  "max_abs_diff": 0.0,
+  "left": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/runs-N/20261125T135443Z-88035d96/common-fixed-actor",
+  "right": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/runs-N/20261125T140528Z-6f65b110/common-fixed-actor",
+  "rows": [
+    {
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    }
+  ]
+}

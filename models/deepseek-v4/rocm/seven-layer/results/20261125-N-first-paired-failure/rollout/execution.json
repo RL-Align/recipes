@@ -1,0 +1,14 @@
+{
+  "action": "rollout-score",
+  "version": 0,
+  "container_id": "54b1ac062b52db155584a6952a5aaf741bcfa14917cb3e7b3c07f621013d17b6",
+  "returncode": 0,
+  "seconds": 120.08088432392105,
+  "active_gpus": 1,
+  "selected_physical_gpus": [
+    0
+  ],
+  "selected_pool_gpus": 8,
+  "machine_gpus": 8,
+  "status": "EXECUTED"
+}

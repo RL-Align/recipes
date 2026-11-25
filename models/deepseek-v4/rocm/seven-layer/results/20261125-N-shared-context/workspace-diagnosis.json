@@ -1,0 +1,26 @@
+{
+  "error": "workspace budget exceeded, not a device OOM",
+  "old_limit": 1073741824,
+  "new_explicit_phase_limit": 4294967296,
+  "numerical_kernel_unchanged": true,
+  "original_generic_default_retained": true,
+  "estimates": [
+    {
+      "queries": 8193,
+      "heads": 64,
+      "head_dim": 512,
+      "kv_budget_rows": 32768,
+      "selected": 640,
+      "planned_bytes": 1130507265
+    },
+    {
+      "queries": 16384,
+      "heads": 64,
+      "head_dim": 512,
+      "kv_budget_rows": 32768,
+      "selected": 640,
+      "planned_bytes": 2227192064
+    }
+  ],
+  "scope": "bounded per-operator resource allowance; same model/input/parallelism"
+}

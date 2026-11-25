@@ -1,0 +1,107 @@
+[
+  {
+    "group": "N1",
+    "ordinary_dp": 1,
+    "expert_dp": 1,
+    "dimensions": {
+      "hidden": 4096,
+      "attention_heads": 64,
+      "index_heads": 64,
+      "output_groups": 8,
+      "vocab": 129280
+    },
+    "divisibility": "CPU_CHECKED",
+    "quantized_cut_alignment": "NOT_GPU_VALIDATED",
+    "sequence_parallel": false,
+    "status": "BLOCKED",
+    "blockers": [
+      "GPU0 root-owned process cannot be signalled by this account",
+      "Rollout TP computation/resharding and N5 EP4 support still need qualification",
+      "Native phased GRPO implementation and recovery require actual GPU qualification"
+    ]
+  },
+  {
+    "group": "N2",
+    "ordinary_dp": 1,
+    "expert_dp": 1,
+    "dimensions": {
+      "hidden": 4096,
+      "attention_heads": 64,
+      "index_heads": 64,
+      "output_groups": 8,
+      "vocab": 129280
+    },
+    "divisibility": "CPU_CHECKED",
+    "quantized_cut_alignment": "NOT_GPU_VALIDATED",
+    "sequence_parallel": false,
+    "status": "BLOCKED",
+    "blockers": [
+      "GPU0 root-owned process cannot be signalled by this account",
+      "Rollout TP computation/resharding and N5 EP4 support still need qualification",
+      "Native phased GRPO implementation and recovery require actual GPU qualification"
+    ]
+  },
+  {
+    "group": "N3",
+    "ordinary_dp": 1,
+    "expert_dp": 1,
+    "dimensions": {
+      "hidden": 4096,
+      "attention_heads": 64,
+      "index_heads": 64,
+      "output_groups": 8,
+      "vocab": 129280
+    },
+    "divisibility": "CPU_CHECKED",
+    "quantized_cut_alignment": "NOT_GPU_VALIDATED",
+    "sequence_parallel": false,
+    "status": "BLOCKED",
+    "blockers": [
+      "GPU0 root-owned process cannot be signalled by this account",
+      "Rollout TP computation/resharding and N5 EP4 support still need qualification",
+      "Native phased GRPO implementation and recovery require actual GPU qualification"
+    ]
+  },
+  {
+    "group": "N4",
+    "ordinary_dp": 1,
+    "expert_dp": 1,
+    "dimensions": {
+      "hidden": 4096,
+      "attention_heads": 64,
+      "index_heads": 64,
+      "output_groups": 8,
+      "vocab": 129280
+    },
+    "divisibility": "CPU_CHECKED",
+    "quantized_cut_alignment": "NOT_GPU_VALIDATED",
+    "sequence_parallel": false,
+    "status": "BLOCKED",
+    "blockers": [
+      "GPU0 root-owned process cannot be signalled by this account",
+      "Rollout TP computation/resharding and N5 EP4 support still need qualification",
+      "Native phased GRPO implementation and recovery require actual GPU qualification"
+    ]
+  },
+  {
+    "group": "N5",
+    "ordinary_dp": 4,
+    "expert_dp": 1,
+    "dimensions": {
+      "hidden": 4096,
+      "attention_heads": 64,
+      "index_heads": 64,
+      "output_groups": 8,
+      "vocab": 129280
+    },
+    "divisibility": "CPU_CHECKED",
+    "quantized_cut_alignment": "NOT_GPU_VALIDATED",
+    "sequence_parallel": false,
+    "status": "BLOCKED",
+    "blockers": [
+      "GPU0 root-owned process cannot be signalled by this account",
+      "Rollout TP computation/resharding and N5 EP4 support still need qualification",
+      "Native phased GRPO implementation and recovery require actual GPU qualification"
+    ]
+  }
+]

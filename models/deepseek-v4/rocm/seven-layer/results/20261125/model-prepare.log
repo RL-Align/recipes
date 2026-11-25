@@ -1,0 +1,10 @@
+REUSE_VERIFIED model-00001-of-00046.safetensors
+REUSE_VERIFIED model-00002-of-00046.safetensors
+REUSE_VERIFIED model-00003-of-00046.safetensors
+REUSE_VERIFIED model-00004-of-00046.safetensors
+REUSE_VERIFIED model-00005-of-00046.safetensors
+DOWNLOADED_VERIFIED model-00006-of-00046.safetensors 3590024776
+DOWNLOADED_VERIFIED model-00007-of-00046.safetensors 3568768976
+REUSE_VERIFIED model-00045-of-00046.safetensors
+DOWNLOADED_VERIFIED model-00008-of-00046.safetensors 3590024776
+SEVEN_LAYER_READY /scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/models/DeepSeek-V4-Flash-7L 62cbd4407a498f44552b1d2216b1f1a6b7cc5fac105669b4c0a3f8f2e73bebfe

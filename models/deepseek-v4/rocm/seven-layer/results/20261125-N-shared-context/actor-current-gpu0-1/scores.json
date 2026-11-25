@@ -1,0 +1,247 @@
+{
+  "dtype": "float32",
+  "encoding": "little-endian-ieee754",
+  "input_suite_sha256": "61a31ee90248bdc0899b0767680b65f14f94ef681a1d3fed899508c3e13ce525",
+  "snapshot_sha256": "62cbd4407a498f44552b1d2216b1f1a6b7cc5fac105669b4c0a3f8f2e73bebfe",
+  "temperature": 1,
+  "top_k": -1,
+  "top_p": 1,
+  "producer": {
+    "engine": "verl.TrainingWorker.infer_batch",
+    "weight_version": 0,
+    "role": "actor",
+    "rank": 1,
+    "pid": 16,
+    "topology": {
+      "pp": 2,
+      "tp": 1,
+      "ep": 1,
+      "etp": 1,
+      "dp": 1,
+      "expert_dp": 1,
+      "cp": 1,
+      "gpus": 2,
+      "sequence_parallel": false
+    },
+    "original_layers": [
+      4,
+      5,
+      6
+    ],
+    "logical_gpu": 1,
+    "pci_bus_id": "0000:8b:00.0",
+    "architecture": "gfx942:sramecc+:xnack-",
+    "device_name": "AMD Instinct MI300X VF"
+  },
+  "rows": [
+    {
+      "id": "boundary-3",
+      "response_ids": [
+        42,
+        43,
+        44
+      ],
+      "expected_tokens": 3,
+      "file": "sample-0000.f32",
+      "sha256": "ab47400a5c0df9c733285b624795f173e393d85680be682e6a7a3d876ea1b0b8"
+    },
+    {
+      "id": "boundary-4",
+      "response_ids": [
+        42,
+        43,
+        44
+      ],
+      "expected_tokens": 3,
+      "file": "sample-0001.f32",
+      "sha256": "511c814ac3896dcbe1bfdf820492db93c6b765c79cff56acadeac526869d9f54"
+    },
+    {
+      "id": "boundary-5",
+      "response_ids": [
+        42,
+        43,
+        44
+      ],
+      "expected_tokens": 3,
+      "file": "sample-0002.f32",
+      "sha256": "0ff616c85ba8a93b1723284d71e8adccd0b0805227e21338c7354a76fe3f8443"
+    },
+    {
+      "id": "boundary-127",
+      "response_ids": [
+        42,
+        43,
+        44
+      ],
+      "expected_tokens": 3,
+      "file": "sample-0003.f32",
+      "sha256": "a339a18dea0d756eb0bb3dc8c575c57eedcb27f6cd95db17e9197fb302135bfb"
+    },
+    {
+      "id": "boundary-128",
+      "response_ids": [
+        42,
+        43,
+        44
+      ],
+      "expected_tokens": 3,
+      "file": "sample-0004.f32",
+      "sha256": "d8302a5bc420f6117bda9601473e5b227c36b0b59db5f5767be29eeb36f8cf43"
+    },
+    {
+      "id": "boundary-129",
+      "response_ids": [
+        42,
+        43,
+        44
+      ],
+      "expected_tokens": 3,
+      "file": "sample-0005.f32",
+      "sha256": "ab4d9a203b15d0675df74c680d4f5d1cccbaa7f438691dabf305b23616948919"
+    },
+    {
+      "id": "boundary-511",
+      "response_ids": [
+        42,
+        43,
+        44
+      ],
+      "expected_tokens": 3,
+      "file": "sample-0006.f32",
+      "sha256": "3d3617c9e771d13ea24ea3103e9c7b3133a16885e013ef75c4b5581b224c7156"
+    },
+    {
+      "id": "boundary-512",
+      "response_ids": [
+        42,
+        43,
+        44
+      ],
+      "expected_tokens": 3,
+      "file": "sample-0007.f32",
+      "sha256": "1502bbe2e423101f9d3ad6b8b331fe3876899628389ff60a0db11ec48fa5f736"
+    },
+    {
+      "id": "boundary-513",
+      "response_ids": [
+        42,
+        43,
+        44
+      ],
+      "expected_tokens": 3,
+      "file": "sample-0008.f32",
+      "sha256": "781e8fefb5a3df42eb456d2c122e559be8750ab2529319285d9491ca58c39dbe"
+    },
+    {
+      "id": "boundary-2047",
+      "response_ids": [
+        42,
+        43,
+        44
+      ],
+      "expected_tokens": 3,
+      "file": "sample-0009.f32",
+      "sha256": "6c254405b6010aac4e813f30ac12f3f18c05532bc11c5a1dee63c11a5f1a7b41"
+    },
+    {
+      "id": "boundary-2048",
+      "response_ids": [
+        42,
+        43,
+        44
+      ],
+      "expected_tokens": 3,
+      "file": "sample-0010.f32",
+      "sha256": "b135f5f3dbfe01cb868f3a75dd3018be03d98366adc771db6669d07339bf99db"
+    },
+    {
+      "id": "boundary-2049",
+      "response_ids": [
+        42,
+        43,
+        44
+      ],
+      "expected_tokens": 3,
+      "file": "sample-0011.f32",
+      "sha256": "866e96c1c42a93e3b2f0b1859f58e24d59565b6f2ee29a5c2dcbd0ca6902c74a"
+    },
+    {
+      "id": "boundary-2177",
+      "response_ids": [
+        42,
+        43,
+        44
+      ],
+      "expected_tokens": 3,
+      "file": "sample-0012.f32",
+      "sha256": "65840d083cf73ec1b44e72351ed74216ce2e0768edb580825bcf87186b9e8290"
+    },
+    {
+      "id": "AB-0",
+      "response_ids": [
+        42,
+        43,
+        44
+      ],
+      "expected_tokens": 3,
+      "file": "sample-0013.f32",
+      "sha256": "a339a18dea0d756eb0bb3dc8c575c57eedcb27f6cd95db17e9197fb302135bfb"
+    },
+    {
+      "id": "AB-1",
+      "response_ids": [
+        42,
+        43,
+        44
+      ],
+      "expected_tokens": 3,
+      "file": "sample-0014.f32",
+      "sha256": "65840d083cf73ec1b44e72351ed74216ce2e0768edb580825bcf87186b9e8290"
+    },
+    {
+      "id": "BA-0",
+      "response_ids": [
+        42,
+        43,
+        44
+      ],
+      "expected_tokens": 3,
+      "file": "sample-0015.f32",
+      "sha256": "65840d083cf73ec1b44e72351ed74216ce2e0768edb580825bcf87186b9e8290"
+    },
+    {
+      "id": "BA-1",
+      "response_ids": [
+        42,
+        43,
+        44
+      ],
+      "expected_tokens": 3,
+      "file": "sample-0016.f32",
+      "sha256": "a339a18dea0d756eb0bb3dc8c575c57eedcb27f6cd95db17e9197fb302135bfb"
+    },
+    {
+      "id": "AB-repeat-0",
+      "response_ids": [
+        42,
+        43,
+        44
+      ],
+      "expected_tokens": 3,
+      "file": "sample-0017.f32",
+      "sha256": "a339a18dea0d756eb0bb3dc8c575c57eedcb27f6cd95db17e9197fb302135bfb"
+    },
+    {
+      "id": "AB-repeat-1",
+      "response_ids": [
+        42,
+        43,
+        44
+      ],
+      "expected_tokens": 3,
+      "file": "sample-0018.f32",
+      "sha256": "65840d083cf73ec1b44e72351ed74216ce2e0768edb580825bcf87186b9e8290"
+    }
+  ]
+}

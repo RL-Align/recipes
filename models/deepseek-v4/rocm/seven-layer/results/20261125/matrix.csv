@@ -1,0 +1,6 @@
+group,status,fixed_weight_status,effective_grpo_updates,target_load_status,actual_topology,rollout_time_s,rollout_throughput_active_response_tok_gpu_s,rollout_throughput_reserved_response_tok_gpu_s,longest_sample_throughput_response_tok_s,actor_logprob_time_s,reference_logprob_time_s,actor_train_time_s,actor_train_throughput_total_tok_s,actor_train_throughput_active_total_tok_gpu_s,actor_train_throughput_reserved_total_tok_gpu_s,total_train_time_s,weight_sync_time_s,offload_restore_time_s,audit_time_s,end_to_end_step_time_s,mean_response_length,mean_raw_reward,mean_kl_loss,expected_tokens,compared_tokens,mismatch_count,mean_abs_logprob_diff,max_abs_logprob_diff
+M1,BLOCKED,NOT_RUN,0,NOT_RUN,NOT_RUN,,,,,,,,,,,,,,,,,,,,,,,
+M2,BLOCKED,NOT_RUN,0,NOT_RUN,NOT_RUN,,,,,,,,,,,,,,,,,,,,,,,
+M3,BLOCKED,NOT_RUN,0,NOT_RUN,NOT_RUN,,,,,,,,,,,,,,,,,,,,,,,
+M4,BLOCKED,NOT_RUN,0,NOT_RUN,NOT_RUN,,,,,,,,,,,,,,,,,,,,,,,
+M5,BLOCKED,NOT_RUN,0,NOT_RUN,NOT_RUN,,,,,,,,,,,,,,,,,,,,,,,

@@ -1,0 +1,57 @@
+{
+  "id": "N2",
+  "status": "experimental",
+  "original_layers": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "actor": {
+    "pp": 2,
+    "tp": 1,
+    "ep": 1,
+    "etp": 1,
+    "dp": 1,
+    "expert_dp": 1,
+    "cp": 1,
+    "gpus": 2,
+    "sequence_parallel": false
+  },
+  "rollout": {
+    "pp": 1,
+    "tp": 2,
+    "ep": 1,
+    "dp": 1,
+    "cp": 1,
+    "gpus": 2,
+    "instances": 1
+  },
+  "phase_reuse": true,
+  "peak_physical_gpus": 2,
+  "actor_pp_layers": [
+    [
+      0,
+      1,
+      2,
+      3
+    ],
+    [
+      4,
+      5,
+      6
+    ]
+  ],
+  "update_limit": 3,
+  "target_load": {
+    "prompts": 8,
+    "responses_per_prompt": 16,
+    "prompt_cap": 1024,
+    "response_cap": 7168
+  },
+  "acceptance": "Full fixed-weight bit parity, then 3 effective GRPO updates with post-v3 validation; startup is insufficient",
+  "physical_gpu_selection": "explicit executor pool; each phase uses only its actual rank count"
+}
