@@ -10,6 +10,7 @@ import datetime
 import fcntl
 import json
 import os
+import socket
 import subprocess
 import time
 from pathlib import Path
@@ -133,7 +134,22 @@ def launch(
     wait_idle(run, gpus)
     command = container_base(work, run, active, image, out)
     if role == "actor":
-        command += ["-m", "torch.distributed.run", "--standalone", "--nproc_per_node=2"]
+        # Hostname "10" is interpreted as numeric IPv4 0.0.0.10 by c10d's
+        # dynamic bootstrap store. An explicit single-node loopback rendezvous
+        # avoids advertising that hostname; no framework source patch is needed.
+        with socket.socket() as rendezvous:
+            rendezvous.bind(("127.0.0.1", 0))
+            port = rendezvous.getsockname()[1]
+        command += [
+            "-m",
+            "torch.distributed.run",
+            "--rdzv_backend=static",
+            "--nnodes=1",
+            "--node_rank=0",
+            "--master_addr=127.0.0.1",
+            "--master_port=" + str(port),
+            "--nproc_per_node=2",
+        ]
     command += [
         "-m",
         "verl.experimental.rl_kernel.phase_runtime",
@@ -483,7 +499,9 @@ def run(work, image, gpus, groups, runtime_lock):
         summary["N5"].update(
             status="BLOCKED",
             reason="Gated follow-up: EP4 actor implementation is not yet qualified; no EP1 substitution",
-            primary_correctness_gate=all(summary[p["id"]]["status"] == "CORRECTNESS_PASS" for p in primary),
+            primary_correctness_gate=all(
+                summary[p["id"]]["status"] == "CORRECTNESS_PASS" for p in profiles()[:4]
+            ),
         )
         write(run_root / "summary.json", summary)
         summarize(run_root)
