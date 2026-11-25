@@ -1,0 +1,247 @@
+{
+  "scope": "saved raw FP32 numerical evidence only; not execution or GRPO acceptance",
+  "status": "FAIL",
+  "snapshot_sha256": "62cbd4407a498f44552b1d2216b1f1a6b7cc5fac105669b4c0a3f8f2e73bebfe",
+  "input_suite_sha256": "61a31ee90248bdc0899b0767680b65f14f94ef681a1d3fed899508c3e13ce525",
+  "expected_tokens": 57,
+  "compared_tokens": 57,
+  "mismatch_count": 12,
+  "mean_abs_diff": 0.048596432334498355,
+  "max_abs_diff": 0.33298683166503906,
+  "rows": [
+    {
+      "id": "boundary-3",
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "id": "boundary-4",
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "id": "boundary-5",
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "id": "boundary-127",
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "id": "boundary-128",
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "id": "boundary-129",
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "id": "boundary-511",
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "id": "boundary-512",
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "id": "boundary-513",
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "id": "boundary-2047",
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "id": "boundary-2048",
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "id": "boundary-2049",
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "id": "boundary-2177",
+      "status": "FAIL",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 3,
+      "mean_abs_diff": 0.2308330535888672,
+      "max_abs_diff": 0.33298683166503906,
+      "finite": true,
+      "first_difference": {
+        "token_index": 0,
+        "left": -16.989133834838867,
+        "right": -17.171669006347656,
+        "left_bits": "0xc187e9bf",
+        "right_bits": "0xc1895f94"
+      }
+    },
+    {
+      "id": "AB-0",
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "id": "AB-1",
+      "status": "FAIL",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 3,
+      "mean_abs_diff": 0.2308330535888672,
+      "max_abs_diff": 0.33298683166503906,
+      "finite": true,
+      "first_difference": {
+        "token_index": 0,
+        "left": -16.989133834838867,
+        "right": -17.171669006347656,
+        "left_bits": "0xc187e9bf",
+        "right_bits": "0xc1895f94"
+      }
+    },
+    {
+      "id": "BA-0",
+      "status": "FAIL",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 3,
+      "mean_abs_diff": 0.2308330535888672,
+      "max_abs_diff": 0.33298683166503906,
+      "finite": true,
+      "first_difference": {
+        "token_index": 0,
+        "left": -16.989133834838867,
+        "right": -17.171669006347656,
+        "left_bits": "0xc187e9bf",
+        "right_bits": "0xc1895f94"
+      }
+    },
+    {
+      "id": "BA-1",
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "id": "AB-repeat-0",
+      "status": "PASS",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 0,
+      "mean_abs_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "finite": true,
+      "first_difference": null
+    },
+    {
+      "id": "AB-repeat-1",
+      "status": "FAIL",
+      "expected_tokens": 3,
+      "compared_tokens": 3,
+      "mismatch_count": 3,
+      "mean_abs_diff": 0.2308330535888672,
+      "max_abs_diff": 0.33298683166503906,
+      "finite": true,
+      "first_difference": {
+        "token_index": 0,
+        "left": -16.989133834838867,
+        "right": -17.171669006347656,
+        "left_bits": "0xc187e9bf",
+        "right_bits": "0xc1895f94"
+      }
+    }
+  ],
+  "rank_and_weight_readback": "PASS"
+}

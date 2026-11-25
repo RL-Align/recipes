@@ -1,0 +1,531 @@
+{
+  "scope": "Actual independent actor/rollout module boundaries; diagnostic only",
+  "records": [
+    {
+      "layer": 0,
+      "event": "rlk.post_mix",
+      "occurrence": 0,
+      "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00007.pt",
+      "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00003.pt",
+      "actor_shape": [
+        2180,
+        4
+      ],
+      "rollout_shape": [
+        2180,
+        4
+      ],
+      "dtype": "torch.float32",
+      "status": "PASS",
+      "elements": 8720,
+      "mismatches": 0
+    },
+    {
+      "layer": 0,
+      "event": "rlk.comb_mix",
+      "occurrence": 0,
+      "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00008.pt",
+      "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00004.pt",
+      "actor_shape": [
+        2180,
+        4,
+        4
+      ],
+      "rollout_shape": [
+        2180,
+        4,
+        4
+      ],
+      "dtype": "torch.float32",
+      "status": "PASS",
+      "elements": 34880,
+      "mismatches": 0
+    },
+    {
+      "layer": 0,
+      "event": "rlk.layer_input",
+      "occurrence": 0,
+      "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00009.pt",
+      "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00005.pt",
+      "actor_shape": [
+        2180,
+        4096
+      ],
+      "rollout_shape": [
+        2180,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "status": "PASS",
+      "elements": 8929280,
+      "mismatches": 0
+    },
+    {
+      "layer": 0,
+      "event": "rlk.normalized",
+      "occurrence": 0,
+      "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00010.pt",
+      "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00006.pt",
+      "actor_shape": [
+        2180,
+        4096
+      ],
+      "rollout_shape": [
+        2180,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "status": "PASS",
+      "elements": 8929280,
+      "mismatches": 0
+    },
+    {
+      "layer": 0,
+      "event": "rlk.residual",
+      "occurrence": 0,
+      "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00049.pt",
+      "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00043.pt",
+      "actor_shape": [
+        2180,
+        4,
+        4096
+      ],
+      "rollout_shape": [
+        2180,
+        4,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "status": "PASS",
+      "elements": 35717120,
+      "mismatches": 0
+    },
+    {
+      "layer": 0,
+      "event": "rlk.post_mix",
+      "occurrence": 1,
+      "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00050.pt",
+      "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00044.pt",
+      "actor_shape": [
+        2180,
+        4
+      ],
+      "rollout_shape": [
+        2180,
+        4
+      ],
+      "dtype": "torch.float32",
+      "status": "PASS",
+      "elements": 8720,
+      "mismatches": 0
+    },
+    {
+      "layer": 0,
+      "event": "rlk.comb_mix",
+      "occurrence": 1,
+      "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00051.pt",
+      "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00045.pt",
+      "actor_shape": [
+        2180,
+        4,
+        4
+      ],
+      "rollout_shape": [
+        2180,
+        4,
+        4
+      ],
+      "dtype": "torch.float32",
+      "status": "PASS",
+      "elements": 34880,
+      "mismatches": 0
+    },
+    {
+      "layer": 0,
+      "event": "rlk.layer_input",
+      "occurrence": 1,
+      "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00052.pt",
+      "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00046.pt",
+      "actor_shape": [
+        2180,
+        4096
+      ],
+      "rollout_shape": [
+        2180,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "status": "PASS",
+      "elements": 8929280,
+      "mismatches": 0
+    },
+    {
+      "layer": 0,
+      "event": "rlk.normalized",
+      "occurrence": 1,
+      "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00053.pt",
+      "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00047.pt",
+      "actor_shape": [
+        2180,
+        4096
+      ],
+      "rollout_shape": [
+        2180,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "status": "PASS",
+      "elements": 8929280,
+      "mismatches": 0
+    },
+    {
+      "layer": 0,
+      "event": "rlk.residual",
+      "occurrence": 1,
+      "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00076.pt",
+      "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00063.pt",
+      "actor_shape": [
+        2180,
+        4,
+        4096
+      ],
+      "rollout_shape": [
+        2180,
+        4,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "status": "PASS",
+      "elements": 35717120,
+      "mismatches": 0
+    },
+    {
+      "layer": 1,
+      "event": "rlk.post_mix",
+      "occurrence": 0,
+      "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00077.pt",
+      "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00064.pt",
+      "actor_shape": [
+        2180,
+        4
+      ],
+      "rollout_shape": [
+        2180,
+        4
+      ],
+      "dtype": "torch.float32",
+      "status": "PASS",
+      "elements": 8720,
+      "mismatches": 0
+    },
+    {
+      "layer": 1,
+      "event": "rlk.comb_mix",
+      "occurrence": 0,
+      "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00078.pt",
+      "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00065.pt",
+      "actor_shape": [
+        2180,
+        4,
+        4
+      ],
+      "rollout_shape": [
+        2180,
+        4,
+        4
+      ],
+      "dtype": "torch.float32",
+      "status": "PASS",
+      "elements": 34880,
+      "mismatches": 0
+    },
+    {
+      "layer": 1,
+      "event": "rlk.layer_input",
+      "occurrence": 0,
+      "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00079.pt",
+      "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00066.pt",
+      "actor_shape": [
+        2180,
+        4096
+      ],
+      "rollout_shape": [
+        2180,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "status": "PASS",
+      "elements": 8929280,
+      "mismatches": 0
+    },
+    {
+      "layer": 1,
+      "event": "rlk.normalized",
+      "occurrence": 0,
+      "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00080.pt",
+      "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00067.pt",
+      "actor_shape": [
+        2180,
+        4096
+      ],
+      "rollout_shape": [
+        2180,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "status": "PASS",
+      "elements": 8929280,
+      "mismatches": 0
+    },
+    {
+      "layer": 1,
+      "event": "rlk.residual",
+      "occurrence": 0,
+      "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00119.pt",
+      "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00104.pt",
+      "actor_shape": [
+        2180,
+        4,
+        4096
+      ],
+      "rollout_shape": [
+        2180,
+        4,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "status": "PASS",
+      "elements": 35717120,
+      "mismatches": 0
+    },
+    {
+      "layer": 1,
+      "event": "rlk.post_mix",
+      "occurrence": 1,
+      "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00120.pt",
+      "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00105.pt",
+      "actor_shape": [
+        2180,
+        4
+      ],
+      "rollout_shape": [
+        2180,
+        4
+      ],
+      "dtype": "torch.float32",
+      "status": "PASS",
+      "elements": 8720,
+      "mismatches": 0
+    },
+    {
+      "layer": 1,
+      "event": "rlk.comb_mix",
+      "occurrence": 1,
+      "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00121.pt",
+      "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00106.pt",
+      "actor_shape": [
+        2180,
+        4,
+        4
+      ],
+      "rollout_shape": [
+        2180,
+        4,
+        4
+      ],
+      "dtype": "torch.float32",
+      "status": "PASS",
+      "elements": 34880,
+      "mismatches": 0
+    },
+    {
+      "layer": 1,
+      "event": "rlk.layer_input",
+      "occurrence": 1,
+      "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00122.pt",
+      "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00107.pt",
+      "actor_shape": [
+        2180,
+        4096
+      ],
+      "rollout_shape": [
+        2180,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "status": "PASS",
+      "elements": 8929280,
+      "mismatches": 0
+    },
+    {
+      "layer": 1,
+      "event": "rlk.normalized",
+      "occurrence": 1,
+      "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00123.pt",
+      "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00108.pt",
+      "actor_shape": [
+        2180,
+        4096
+      ],
+      "rollout_shape": [
+        2180,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "status": "PASS",
+      "elements": 8929280,
+      "mismatches": 0
+    },
+    {
+      "layer": 1,
+      "event": "rlk.residual",
+      "occurrence": 1,
+      "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00146.pt",
+      "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00124.pt",
+      "actor_shape": [
+        2180,
+        4,
+        4096
+      ],
+      "rollout_shape": [
+        2180,
+        4,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "status": "PASS",
+      "elements": 35717120,
+      "mismatches": 0
+    },
+    {
+      "layer": 2,
+      "event": "rlk.post_mix",
+      "occurrence": 0,
+      "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00147.pt",
+      "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00125.pt",
+      "actor_shape": [
+        2180,
+        4
+      ],
+      "rollout_shape": [
+        2180,
+        4
+      ],
+      "dtype": "torch.float32",
+      "status": "PASS",
+      "elements": 8720,
+      "mismatches": 0
+    },
+    {
+      "layer": 2,
+      "event": "rlk.comb_mix",
+      "occurrence": 0,
+      "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00148.pt",
+      "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00126.pt",
+      "actor_shape": [
+        2180,
+        4,
+        4
+      ],
+      "rollout_shape": [
+        2180,
+        4,
+        4
+      ],
+      "dtype": "torch.float32",
+      "status": "PASS",
+      "elements": 34880,
+      "mismatches": 0
+    },
+    {
+      "layer": 2,
+      "event": "rlk.layer_input",
+      "occurrence": 0,
+      "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00149.pt",
+      "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00127.pt",
+      "actor_shape": [
+        2180,
+        4096
+      ],
+      "rollout_shape": [
+        2180,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "status": "PASS",
+      "elements": 8929280,
+      "mismatches": 0
+    },
+    {
+      "layer": 2,
+      "event": "rlk.normalized",
+      "occurrence": 0,
+      "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00150.pt",
+      "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00128.pt",
+      "actor_shape": [
+        2180,
+        4096
+      ],
+      "rollout_shape": [
+        2180,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "status": "PASS",
+      "elements": 8929280,
+      "mismatches": 0
+    },
+    {
+      "layer": 2,
+      "event": "rlk.residual",
+      "occurrence": 0,
+      "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00213.pt",
+      "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00175.pt",
+      "actor_shape": [
+        2180,
+        4,
+        4096
+      ],
+      "rollout_shape": [
+        2180,
+        4,
+        4096
+      ],
+      "dtype": "torch.bfloat16",
+      "status": "FAIL",
+      "elements": 35717120,
+      "mismatches": 650805,
+      "first_index": 33603584,
+      "actor_value": -0.005218505859375,
+      "rollout_value": -0.005340576171875,
+      "actor_bits": "bbab",
+      "rollout_bits": "bbaf"
+    }
+  ],
+  "first_difference": {
+    "layer": 2,
+    "event": "rlk.residual",
+    "occurrence": 0,
+    "actor_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/common-fixed-actor/traces/actor-rank-0-chunk-0-single-2177/00213.pt",
+    "rollout_file": "/experiment/runs-N/20261125T150855Z-d07afa9a/N1/fixed-rollout/policy-sync/traces/rollout-rank-0-single-2177/00175.pt",
+    "actor_shape": [
+      2180,
+      4,
+      4096
+    ],
+    "rollout_shape": [
+      2180,
+      4,
+      4096
+    ],
+    "dtype": "torch.bfloat16",
+    "status": "FAIL",
+    "elements": 35717120,
+    "mismatches": 650805,
+    "first_index": 33603584,
+    "actor_value": -0.005218505859375,
+    "rollout_value": -0.005340576171875,
+    "actor_bits": "bbab",
+    "rollout_bits": "bbaf"
+  }
+}

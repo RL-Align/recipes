@@ -1,0 +1,23 @@
+{
+  "scope": "Actual selected compressed expert-independent key sets; not final score acceptance",
+  "rows": 2180,
+  "different_rows": 129,
+  "first_different_position": 2051,
+  "actor_only": [
+    276
+  ],
+  "rollout_only": [
+    19
+  ],
+  "raw_head_weights": {
+    "actor_shape": [
+      2180,
+      64
+    ],
+    "rollout_shape": [
+      2180,
+      64
+    ],
+    "mismatches": 0
+  }
+}

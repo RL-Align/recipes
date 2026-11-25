@@ -1,0 +1,24 @@
+{
+  "N1": {
+    "status": "FAIL",
+    "rank_and_weight_readback": "PASS",
+    "expected_tokens": 57,
+    "compared_tokens": 57,
+    "mismatch_count": 12,
+    "mean_abs_diff": 0.048596432334498355,
+    "max_abs_diff": 0.33298683166503906
+  },
+  "N2": "NOT_RUN",
+  "N3": "NOT_RUN",
+  "N4": "NOT_RUN",
+  "N5": "IMPLEMENTING: local expert component only",
+  "valid_updates": {
+    "N1": 0,
+    "N2": 0,
+    "N3": 0,
+    "N4": 0,
+    "N5": 0
+  },
+  "target_load": "NOT_RUN all groups",
+  "next": "actual native FP8 indexer replay; fail closed before full model rerun"
+}

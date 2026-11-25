@@ -1,0 +1,96 @@
+{
+  "scope": "Actual per-layer module returns and native first-execution receipts; not bit or backward acceptance",
+  "layers": [
+    {
+      "original_layer": 0,
+      "compress_ratio": 0,
+      "actor_attention_forward_events": 1,
+      "actor_ffn_forward_events": 1,
+      "rollout_attention_forward_events": 1,
+      "rollout_ffn_forward_events": 1,
+      "rollout_actual_topk_operator_events": 0,
+      "numerical_acceptance": "FAIL globally; forward execution only",
+      "backward": "NOT_RUN"
+    },
+    {
+      "original_layer": 1,
+      "compress_ratio": 0,
+      "actor_attention_forward_events": 1,
+      "actor_ffn_forward_events": 1,
+      "rollout_attention_forward_events": 1,
+      "rollout_ffn_forward_events": 1,
+      "rollout_actual_topk_operator_events": 0,
+      "numerical_acceptance": "FAIL globally; forward execution only",
+      "backward": "NOT_RUN"
+    },
+    {
+      "original_layer": 2,
+      "compress_ratio": 4,
+      "actor_attention_forward_events": 1,
+      "actor_ffn_forward_events": 1,
+      "rollout_attention_forward_events": 1,
+      "rollout_ffn_forward_events": 1,
+      "rollout_actual_topk_operator_events": 1,
+      "numerical_acceptance": "FAIL globally; forward execution only",
+      "backward": "NOT_RUN"
+    },
+    {
+      "original_layer": 3,
+      "compress_ratio": 128,
+      "actor_attention_forward_events": 1,
+      "actor_ffn_forward_events": 1,
+      "rollout_attention_forward_events": 1,
+      "rollout_ffn_forward_events": 1,
+      "rollout_actual_topk_operator_events": 0,
+      "numerical_acceptance": "FAIL globally; forward execution only",
+      "backward": "NOT_RUN"
+    },
+    {
+      "original_layer": 4,
+      "compress_ratio": 4,
+      "actor_attention_forward_events": 1,
+      "actor_ffn_forward_events": 1,
+      "rollout_attention_forward_events": 1,
+      "rollout_ffn_forward_events": 1,
+      "rollout_actual_topk_operator_events": 1,
+      "numerical_acceptance": "FAIL globally; forward execution only",
+      "backward": "NOT_RUN"
+    },
+    {
+      "original_layer": 5,
+      "compress_ratio": 128,
+      "actor_attention_forward_events": 1,
+      "actor_ffn_forward_events": 1,
+      "rollout_attention_forward_events": 1,
+      "rollout_ffn_forward_events": 1,
+      "rollout_actual_topk_operator_events": 0,
+      "numerical_acceptance": "FAIL globally; forward execution only",
+      "backward": "NOT_RUN"
+    },
+    {
+      "original_layer": 6,
+      "compress_ratio": 4,
+      "actor_attention_forward_events": 1,
+      "actor_ffn_forward_events": 1,
+      "rollout_attention_forward_events": 1,
+      "rollout_ffn_forward_events": 1,
+      "rollout_actual_topk_operator_events": 1,
+      "numerical_acceptance": "FAIL globally; forward execution only",
+      "backward": "NOT_RUN"
+    }
+  ],
+  "actual_actor_receipts": {
+    "RLK_NATIVE_HASH_ROUTING_EXECUTED": 3,
+    "RLK_NATIVE_LEARNED_ROUTING_EXECUTED": 4,
+    "RLK_NATIVE_W4A16_EXPERTS_EXECUTED": 7,
+    "RLK_NATIVE_COMPRESSED_KV_EXECUTED": 5,
+    "RLK_NATIVE_SPARSE_EXECUTED": 7
+  },
+  "mhc_actual_residual_returns": 14,
+  "embedding_actual_returns": 1,
+  "raw_logprob_actual_events": 1,
+  "valid_backward": "NOT_RUN",
+  "PP_backward": "NOT_RUN",
+  "EP4": "NOT_IMPLEMENTED",
+  "MTP": "OUT_OF_SCOPE"
+}
