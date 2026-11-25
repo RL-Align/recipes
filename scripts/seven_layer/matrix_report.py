@@ -19,6 +19,35 @@ def read(path, default=None):
 def summarize(root):
     summary = read(root / "summary.json", {})
     tables = {}
+    fixed_rows = []
+    for profile in profiles():
+        name = profile["id"]
+        evidence = read(root / name / "fixed-rollout/verification.json", {})
+        state = summary.get(name, {})
+        fixed_rows.append(
+            dict(
+                group=name,
+                fixed_weight_status=state.get("fixed_weight", "NOT_RUN"),
+                independent_verifier=evidence.get("status", "NOT_RUN"),
+                rank_and_weight_readback=evidence.get("rank_and_weight_readback", "NOT_RUN"),
+                scope="fixed-weight scoring only; distinct from optimizer-update and generation metrics",
+                **{
+                    key: evidence.get(key, NA)
+                    for key in [
+                        "expected_tokens",
+                        "compared_tokens",
+                        "mismatch_count",
+                        "mean_abs_diff",
+                        "max_abs_diff",
+                    ]
+                },
+            )
+        )
+    tables["fixed"] = fixed_rows
+    with (root / "metrics-fixed.csv").open("w") as f:
+        writer = csv.DictWriter(f, fieldnames=list(fixed_rows[0]))
+        writer.writeheader()
+        writer.writerows(fixed_rows)
     for dataset in ["copy", "dapo"]:
         rows = []
         for p in profiles():
