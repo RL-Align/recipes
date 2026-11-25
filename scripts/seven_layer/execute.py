@@ -59,6 +59,8 @@ def wait_idle(root, gpus):
 
 
 def container_base(work, run, active, image, out, *, gpu=True):
+    ray_logs = out / "ray-runtime"
+    ray_logs.mkdir(parents=True, exist_ok=True)
     command = [
         "docker",
         "create",
@@ -77,6 +79,8 @@ def container_base(work, run, active, image, out, *, gpu=True):
         f"type=bind,source={work}/data,target=/experiment/data,readonly",
         "--mount",
         f"type=bind,source={out},target=/outputs",
+        "--mount",
+        f"type=bind,source={ray_logs},target=/tmp/rv4",
         "-e",
         "OMP_NUM_THREADS=4",
         "-e",
