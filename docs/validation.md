@@ -25,4 +25,4 @@ replicas and checks that no replica resumes admission.
 CPU tests do not validate RCCL transport, native GPU arithmetic, host-driver
 compatibility, long-context parity, math rewards, throughput or 200 successful
 updates. AMD execution must produce its own complete retained evidence using
-the [operator guide](amd-quickstart.zh-CN.md).
+the [DeepSeek-V4 recipe](../models/deepseek-v4/rocm/README.md).

@@ -329,9 +329,11 @@ def main():
     elif args.action == "prepare":
         prepare(c, args.download)
     elif args.action in ("run", "verify"):
-        if not args.output:
+        if args.action == "verify" and not args.output:
             parser.error("--output is required")
-        operate(c, args.output, verify_only=args.action == "verify")
+        output = args.output or str(Path(c["work_dir"]) / "runs" / f"{c['profile']}-{uuid4().hex[:12]}")
+        print(f"Run directory: {output}", flush=True)
+        operate(c, output, verify_only=args.action == "verify")
     else:
         from scripts.report import report
 
