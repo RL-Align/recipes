@@ -9,6 +9,7 @@ Nonquantized parameters are trained; packed FP4/FP8 weights stay frozen.
 
 | Configuration | Actor | Rollout |
 | --- | --- | --- |
+| [Single node · 4 GPUs](configs/single-node-4gpu.json) | Physical GPUs 4–5: PP2 × DP1 | Physical GPUs 6–7: one PP2 instance |
 | [Single node · 8 GPUs](configs/single-node-8gpu.json) | GPUs 0–3: PP2 × DP2 | GPUs 4–7: two PP2 instances |
 | [Four nodes · 32 GPUs](configs/four-node-32gpu.json) | Nodes 0–1: PP2 × DP8, 16 GPUs | Nodes 2–3: eight PP2 instances, 16 GPUs |
 
@@ -76,7 +77,8 @@ result does not validate a newly assembled image or the four-node run.
 ## Requirements
 
 - Linux with a compatible ROCm driver, Docker, Git, Python 3.10+ and `rocm-smi`.
-- Eight idle GPUs, physical IDs 0–7, on each node. Use the same architecture across nodes.
+- Four idle selected GPUs for `single-node-4gpu` (default physical IDs 4–7), or eight idle GPUs 0–7 for the 8-/32-GPU configurations. Use the same architecture across nodes.
+- Four GPUs provide **four-card functional validation** only; they do not validate eight-card DP2 or four-node execution. Ordered `nodes[].gpus` assigns the first half to actor and the second half to rollout. Only selected DRM devices and KFD GPU IDs are exposed, then actual worker PCI identities are independently verified.
 - For four nodes: noninteractive SSH from the first node and the same shared
   filesystem mounted at `work_dir` on every node.
 - Reachable node IPs and the cluster's Ray/RCCL network access. Enable RDMA only
@@ -114,6 +116,9 @@ cd recipes
 Choose **one** configuration:
 
 ```bash
+# Four-card functional validation on physical GPUs 4–7
+# cp models/deepseek-v4/rocm/configs/single-node-4gpu.json site.json
+
 # Single node, 8 GPUs
 cp models/deepseek-v4/rocm/configs/single-node-8gpu.json site.json
 
@@ -127,6 +132,7 @@ Edit `site.json`:
 
 | Field | Set to |
 | --- | --- |
+| `nodes[].gpus` | Ordered physical GPU IDs: four selected IDs for the four-card topology; IDs 0–7 for other topologies |
 | `nodes[].ip` | Each node's reachable IP address |
 | `nodes[].ssh` | `local` for the first node; SSH alias or `user@host` for peers |
 | `work_dir` | Writable work directory; a shared filesystem for four nodes |
@@ -156,6 +162,8 @@ Do not prepare the same dataset directory twice.
 python3 run.py run --config site.json
 ```
 
+All topologies retain three continuous effective updates, full-training-batch raw FP32 bit equality and the independent native verifier. The four-card verifier additionally requires exactly two actor ranks (DP1), one PP2 rollout replica, and PCI devices matching the declared physical role allocation.
+
 The launcher prints a new directory under `work_dir/runs/`, runs independent
 verification and writes `report.md`. It stops only the containers it created.
 A successful run must have `"status": "PASS"` in `verification.json`.
@@ -166,7 +174,7 @@ After the correctness run passes, use real DAPO-Math-17k or GSM8K data.
 
 | Profile | Updates | Prompts × responses | Response cap |
 | --- | --- | --- | --- |
-| `smoke` | 3 | 2 × 2 on 8 GPUs; 8 × 2 on 32 GPUs | 16 tokens |
+| `smoke` | 3 | 2 × 2 on 4/8 GPUs; 8 × 2 on 32 GPUs | 16 tokens |
 | `math-smoke` | 3 | 8 × 16 | 7,168 tokens |
 | `math-200` | 200 | 8 × 16 | 7,168 tokens |
 

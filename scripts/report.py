@@ -84,6 +84,7 @@ def report(output):
     }
     summary = dict(
         status="PASS" if passed else "NOT_PASSED",
+        scope=expected.get("scope", "topology recorded in plan.json"),
         requested_updates=expected["steps"],
         independently_verified_updates=expected["steps"] if passed else 0,
         recorded_metric_steps=len(rows),
@@ -99,6 +100,8 @@ def report(output):
     (output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     lines = [
         f"# Run {output.name}",
+        "",
+        f"Scope: **{summary['scope']}**.",
         "",
         f"Status: **{summary['status']}**. Independently verified updates: "
         f"{summary['independently_verified_updates']}/{expected['steps']}.",

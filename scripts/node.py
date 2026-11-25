@@ -111,9 +111,12 @@ def start(payload):
         command += ["--device=/dev/infiniband"]
     output = Path(payload["output"])
     allocation_file = output / f"allocation-{node['name']}.json"
-    if len(c["nodes"]) == 1:
-        for row in rows:
-            row["role"] = "actor" if row["physical_gpu"] < 4 else "rollout"
+    for local, row in enumerate(rows):
+        row["container_gpu"] = local
+        if len(c["nodes"]) == 1:
+            row["role"] = "actor" if local < len(rows) // 2 else "rollout"
+        else:
+            row["role"] = "actor" if node in c["nodes"][:2] else "rollout"
     allocation_file.write_text(json.dumps(rows, indent=2))
     cache = Path(c["work_dir"]) / "cache" / node["name"]
     cache.mkdir(parents=True, exist_ok=True)
@@ -130,7 +133,7 @@ def start(payload):
     env = dict(
         LD_PRELOAD="/opt/dsv4/lib/rlk-isolated-kfd.so",
         RLK_ALLOWED_KFD_GPU_IDS=",".join(str(r["kfd_gpu_id"]) for r in rows),
-        HIP_VISIBLE_DEVICES=",".join(map(str, range(8))),
+        HIP_VISIBLE_DEVICES=",".join(map(str, range(len(rows)))),
         VLLM_HOST_IP=node["ip"],
         RLK_DEVICE_ALLOCATION=str(allocation_file),
         HF_HOME=str(cache / "huggingface"),
@@ -168,7 +171,7 @@ def ray_start(payload):
         "/opt/dsv4-venv/bin/ray",
         "start",
         "--node-ip-address=" + node["ip"],
-        "--num-gpus=8",
+        f"--num-gpus={len(node['gpus'])}",
         "--num-cpus=48",
         "--disable-usage-stats",
         f"--node-manager-port={port + 1}",

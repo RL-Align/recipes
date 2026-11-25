@@ -66,13 +66,13 @@ def config(path):
 def validate(c):
     if c.get("schema_version") != 1 or c.get("recipe") != "deepseek-v4/rocm":
         raise ValueError("expected recipe deepseek-v4/rocm, schema_version=1")
-    if c.get("topology") not in ("single-node-8gpu", "four-node-32gpu"):
-        raise ValueError("only single-node-8gpu and four-node-32gpu are implemented")
+    if c.get("topology") not in ("single-node-4gpu", "single-node-8gpu", "four-node-32gpu"):
+        raise ValueError("only single-node-4gpu, single-node-8gpu and four-node-32gpu are implemented")
     if c.get("gpu_arch", "gfx942") not in ("gfx942", "gfx950"):
         raise ValueError("gpu_arch must be gfx942 (MI300X) or gfx950 (MI350X)")
     if type(c.get("numa_interleave", False)) is not bool:
         raise ValueError("numa_interleave must be boolean")
-    count = 1 if c["topology"] == "single-node-8gpu" else 4
+    count = 4 if c["topology"] == "four-node-32gpu" else 1
     nodes = c.get("nodes", [])
     if len(nodes) != count:
         raise ValueError(f"this topology requires exactly {count} physical nodes")
@@ -88,8 +88,16 @@ def validate(c):
             )
         if n["ssh"].startswith("-"):
             raise ValueError("SSH target cannot be an option")
-        if sorted(n["gpus"]) != list(range(8)) or any(type(i) is not int for i in n["gpus"]):
-            raise ValueError("each selected node requires the eight idle physical GPUs 0..7")
+        gpus = n["gpus"]
+        if c["topology"] == "single-node-4gpu":
+            if (
+                len(gpus) != 4
+                or any(type(i) is not int or not 0 <= i < 8 for i in gpus)
+                or gpus != sorted(set(gpus))
+            ):
+                raise ValueError("four-card validation requires four unique ordered physical GPUs in 0..7")
+        elif gpus != list(range(8)) or any(type(i) is not int for i in gpus):
+            raise ValueError("eight-/32-GPU topologies require physical GPUs 0..7 on each node")
     if len(set(ips)) != count or len({n["name"] for n in nodes}) != count:
         raise ValueError("nodes must have unique names and reachable physical IPs")
     for key in ("work_dir", "model_dir", "baseline_data_dir"):
@@ -116,16 +124,31 @@ def plan(c):
     validate(c)
     multi = len(c["nodes"]) == 4
     math = c["profile"] != "smoke"
+    four = c["topology"] == "single-node-4gpu"
+    actor = 16 if multi else (2 if four else 4)
+    allocation = []
+    for node_index, node in enumerate(c["nodes"]):
+        for local, physical in enumerate(node["gpus"]):
+            role = (
+                ("actor" if node_index < 2 else "rollout")
+                if multi
+                else ("actor" if local < actor else "rollout")
+            )
+            allocation.append(dict(node=node["name"], physical_gpu=physical, container_gpu=local, role=role))
     return dict(
         nodes=len(c["nodes"]),
-        total_gpus=32 if multi else 8,
+        total_gpus=32 if multi else (4 if four else 8),
+        scope="four-card functional validation" if four else c["topology"],
+        physical_allocation=allocation,
         actor_nodes=[n["ip"] for n in c["nodes"][:2]] if multi else [],
         rollout_nodes=[n["ip"] for n in c["nodes"][2:]] if multi else [],
-        actor_gpus=16 if multi else 4,
+        actor_gpus=actor,
+        actor_gpus_per_node=8 if multi else actor,
         actor_pp=2,
-        actor_dp=8 if multi else 2,
-        rollout_gpus=16 if multi else 4,
-        rollout_replicas=8 if multi else 2,
+        actor_dp=actor // 2,
+        rollout_gpus=actor,
+        rollout_gpus_per_node=8 if multi else actor,
+        rollout_replicas=actor // 2,
         rollout_pp=2,
         tp=1,
         ep=1,
@@ -171,9 +194,9 @@ def launch(c, output, prompts):
         "actor_rollout_ref.rollout.enable_chunked_prefill": False,
         "actor_rollout_ref.rollout.agent.num_workers": 1,
         "trainer.nnodes": 2 if multi else 1,
-        "trainer.n_gpus_per_node": 8 if multi else 4,
+        "trainer.n_gpus_per_node": p["actor_gpus_per_node"],
         "actor_rollout_ref.rollout.nnodes": 2 if multi else 1,
-        "actor_rollout_ref.rollout.n_gpus_per_node": 8 if multi else 4,
+        "actor_rollout_ref.rollout.n_gpus_per_node": p["rollout_gpus_per_node"],
         "trainer.total_training_steps": p["steps"],
         "trainer.total_epochs": 1,
         "trainer.save_freq": -1,

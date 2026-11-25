@@ -18,18 +18,25 @@ def preflight(c):
     import ray
     import torch
 
-    if torch.version.hip is None or torch.cuda.device_count() != 8:
-        raise RuntimeError("runtime must see exactly the eight allocated ROCm GPUs")
+    allocation = json.loads(Path(os.environ["RLK_DEVICE_ALLOCATION"]).read_text())
+    if torch.version.hip is None or torch.cuda.device_count() != len(allocation):
+        raise RuntimeError("runtime must see exactly the explicitly allocated ROCm GPUs")
+    from rl_engine.integrations.common.device_identity import hip_device_identity
+
     devices = []
-    for index in range(8):
+    for index in range(len(allocation)):
         props = torch.cuda.get_device_properties(index)
         arch = props.gcnArchName.split(":")[0]
         if arch != c.get("gpu_arch", "gfx942"):
             raise RuntimeError(f"GPU {arch} differs from the configured/built architecture")
+        torch.cuda.set_device(index)
+        actual = hip_device_identity()
+        if actual["pci_bus_id"].lower() != allocation[index]["pci_bus_id"].lower():
+            raise RuntimeError("container GPU ordinal does not match the declared physical PCI device")
         value = torch.ones(1, device=f"cuda:{index}")
         if value.item() != 1:
             raise RuntimeError("GPU health probe failed")
-        devices.append(dict(device=index, arch=arch, name=props.name))
+        devices.append(dict(device=index, arch=arch, name=props.name, **actual))
     from verl.experimental.rl_kernel.runtime import process_identity
 
     identity = process_identity("recipe-preflight")
@@ -56,7 +63,13 @@ def verify(c, output):
     spec.loader.exec_module(module)
     # The locked source patch generalizes only layout/counts to this workload.
     # Raw tensors, optimizer/DDP/PP and complete stage readback remain required.
-    return module.verify(output / "policy-sync", data_dir(c) / "checkpoint-inventory.json")
+    from scripts.placement import verify_runtime_layout
+
+    placement = verify_runtime_layout(c, output)
+    result = module.verify(output / "policy-sync", data_dir(c) / "checkpoint-inventory.json")
+    result["recipe_placement"] = placement
+    result["recipe_scope"] = plan(c)["scope"]
+    return result
 
 
 def main():
@@ -80,7 +93,7 @@ def main():
     ray.init(address=address, log_to_driver=False)
     live = {n["NodeManagerAddress"]: n for n in ray.nodes() if n["Alive"]}
     if set(live) != {n["ip"] for n in c["nodes"]} or any(
-        n["Resources"].get("GPU") != 8 for n in live.values()
+        live[node["ip"]]["Resources"].get("GPU") != len(node["gpus"]) for node in c["nodes"]
     ):
         raise RuntimeError("Ray cluster node/GPU allocation differs from the declared dedicated cluster")
     ray.shutdown()
