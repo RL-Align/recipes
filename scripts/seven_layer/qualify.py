@@ -34,12 +34,14 @@ def phase(work, root, image, policy, rows, mode, *, trace_run=None):
             f"--master_port={port}",
             "--nproc_per_node=8",
         ]
-    if mode == "q-up-replay":
+    if mode in ("q-up-replay", "indexer-replay"):
         if trace_run is None:
             raise ValueError("Q-up replay requires saved real paired trace operands")
         command += [
             "-m",
-            "examples.operators.dsv4_4l.replay_q_up",
+            "examples.operators.dsv4_4l.replay_q_up"
+            if mode == "q-up-replay"
+            else "examples.operators.dsv4_4l.replay_indexer",
             "--trace-run",
             mapped(work, trace_run),
             "--model",
@@ -86,7 +88,7 @@ def phase(work, root, image, policy, rows, mode, *, trace_run=None):
     return dict(status="PASS", seconds=time.monotonic() - started, ranks=records)
 
 
-def qualify(work, runtime_lock, resource_policy, *, q_up_trace=None):
+def qualify(work, runtime_lock, resource_policy, *, q_up_trace=None, indexer_trace=None):
     info = json.loads(runtime_lock.read_text())
     policy = json.loads(resource_policy.read_text())
     root = work / "evidence" / ("health-" + uuid4().hex[:12])
@@ -107,6 +109,10 @@ def qualify(work, runtime_lock, resource_policy, *, q_up_trace=None):
         if q_up_trace:
             result["q_up_diagnostic_replay"] = phase(
                 work, root, image, policy, rows, "q-up-replay", trace_run=q_up_trace
+            )
+        if indexer_trace:
+            result["indexer_diagnostic_replay"] = phase(
+                work, root, image, policy, rows, "indexer-replay", trace_run=indexer_trace
             )
         result.update(status="PASS", communication_world_size=8)
     except BaseException as error:

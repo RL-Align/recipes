@@ -11,15 +11,15 @@
   "recipe_base": "b92df81ca240cba55649aed625e173d6b2d607f2",
   "kernel": {
     "base": "71c7cb2d033806632cef1a3678939bf73dc581dd",
-    "commit": "983ff03c762765ad39fa28dc53ddd8970130704f",
-    "tree": "87ba79596f6f836ce3257b4b758c822c385e6fab",
+    "commit": "3fcbda2e7c5bd7d4ceeff49f8791c189a64a11ea",
+    "tree": "9a2ae575da5cd254d1d66efc782f630405fbb710",
     "branch": "dsv4-rocm"
   },
   "verl": {
     "historical_recipe_base": "d154f5aa3d9a5a19210bc2df499db6ef6532db90",
     "base": "c39cdd4465233a199b87ef3c3ed6b0e65bff042f",
-    "commit": "36b4dc16b756adf55697d7f1b50a6d4b54abb27b",
-    "tree": "734c6a1797686b65d7c80153c124b394311d02f1",
+    "commit": "c7d7edb76eec03b22f585c643071cdf8e6d3ce5e",
+    "tree": "82b6f7b34bd93cc0a941fb8db94928e9432a12ac",
     "branch": "main",
     "change": "Explicit new fork-main pin; 99-file upstream delta from historical d154f5. CPU import check only; no compatibility or GPU acceptance claim."
   },
@@ -66,5 +66,12 @@
       "subset": "main"
     }
   },
-  "external_sources_modified": false
+  "external_sources_modified": false,
+  "indexer_numeric_profile": {
+    "name": "native-vllm-c4-fp8-qk-rope-mqa-top512-zero-aux-v1",
+    "weights": "original BF16/F32 unchanged",
+    "activation_domain": "native inference FP8 Q/K and native folded FP32 scales/weights; replaces eager actor BF16/Hadamard score profile",
+    "auxiliary_loss_coefficient": 0,
+    "scope": "GPU real-operand replay and full matrix acceptance pending"
+  }
 }

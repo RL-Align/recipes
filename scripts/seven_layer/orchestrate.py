@@ -16,6 +16,7 @@ def main():
     ap.add_argument("--runtime-lock", type=Path, required=True)
     ap.add_argument("--resource-policy", type=Path, required=True)
     ap.add_argument("--q-up-trace-run", type=Path)
+    ap.add_argument("--indexer-trace-run", type=Path)
     ap.add_argument("--gpus", nargs="+", type=int, default=list(range(8)))
     ap.add_argument("--groups", nargs="+", choices=["N1", "N2", "N3", "N4"], default=["N1", "N2", "N3", "N4"])
     args = ap.parse_args()
@@ -27,6 +28,7 @@ def main():
             args.runtime_lock.resolve(),
             args.resource_policy.resolve(),
             q_up_trace=args.q_up_trace_run.resolve() if args.q_up_trace_run else None,
+            indexer_trace=args.indexer_trace_run.resolve() if args.indexer_trace_run else None,
         )
         info = json.loads(args.runtime_lock.read_text())
         run(
