@@ -187,6 +187,17 @@ def launch(
     gpus = [r["physical_gpu"] for r in active]
     if len(active) != profile[role]["gpus"]:
         raise ValueError("selected physical GPU pool cannot satisfy unchanged target topology")
+    phase_state = dict(
+        group=profile["id"],
+        action=action,
+        version=version,
+        image_id=image,
+        physical_gpus=gpus,
+        output=str(out),
+        status="WAITING_FOR_SELECTED_DEVICES",
+        timestamp=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    )
+    write(run / "current-phase.json", phase_state)
     wait_idle(run, gpus)
     command = container_base(work, run, active, image, out)
     if role == "actor":
@@ -240,6 +251,10 @@ def launch(
     write(out / "container.json", dict(container_id=cid, action=action, version=version, profile=profile))
     # Creating a container is not a reservation; guard again immediately at actual start.
     wait_idle(run, gpus)
+    phase_state.update(
+        status="RUNNING", container_id=cid, timestamp=datetime.datetime.now(datetime.timezone.utc).isoformat()
+    )
+    write(run / "current-phase.json", phase_state)
     began = time.monotonic()
     next_sample = 0.0
     with (out / "driver.log").open("w") as log:
@@ -275,6 +290,7 @@ def launch(
         status="EXECUTED" if code == 0 else "FAIL",
     )
     write(out / "execution.json", record)
+    write(run / "current-phase.json", dict(phase_state, **record))
     if code:
         log_text = (out / "driver.log").read_text(errors="replace")
         if any(
@@ -561,6 +577,8 @@ def run(work, image, gpus, groups, runtime_lock, shared_policy, health_receipt, 
             name = profile["id"]
             base = run_root / name
             base.mkdir()
+            summary[name].update(status="RUNNING", fixed_weight="RUNNING")
+            write(run_root / "summary.json", summary)
             try:
                 rollout = base / "fixed-rollout"
                 launch(work, run_root, rows, image, profile, "rollout-score", rollout, policy=initial_policy)
@@ -576,6 +594,8 @@ def run(work, image, gpus, groups, runtime_lock, shared_policy, health_receipt, 
                 raise
             except Exception as e:
                 summary[name].update(status="FAIL", error=str(e))
+                if summary[name]["fixed_weight"] == "RUNNING":
+                    summary[name]["fixed_weight"] = "FAIL"
                 partial = run_root / name / "copy/steps.json"
                 if partial.exists():
                     saved = json.loads(partial.read_text())
