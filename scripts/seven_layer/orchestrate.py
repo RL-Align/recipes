@@ -15,13 +15,19 @@ def main():
     ap.add_argument("--work", type=Path, required=True)
     ap.add_argument("--runtime-lock", type=Path, required=True)
     ap.add_argument("--resource-policy", type=Path, required=True)
+    ap.add_argument("--q-up-trace-run", type=Path)
     ap.add_argument("--gpus", nargs="+", type=int, default=list(range(8)))
     ap.add_argument("--groups", nargs="+", choices=["N1", "N2", "N3", "N4"], default=["N1", "N2", "N3", "N4"])
     args = ap.parse_args()
     work = args.work.resolve()
     with (work / "orchestrate-N.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        health = qualify(work, args.runtime_lock.resolve(), args.resource_policy.resolve())
+        health = qualify(
+            work,
+            args.runtime_lock.resolve(),
+            args.resource_policy.resolve(),
+            q_up_trace=args.q_up_trace_run.resolve() if args.q_up_trace_run else None,
+        )
         info = json.loads(args.runtime_lock.read_text())
         run(
             work,

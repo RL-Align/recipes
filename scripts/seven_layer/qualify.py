@@ -10,11 +10,11 @@ import time
 from pathlib import Path
 from uuid import uuid4
 
-from execute import allocation, container_base, observe, stop_owned_container, wait_idle, write
+from execute import allocation, container_base, mapped, observe, stop_owned_container, wait_idle, write
 
 
-def phase(work, root, image, policy, rows, mode):
-    active = rows[:1] if mode == "single" else rows
+def phase(work, root, image, policy, rows, mode, *, trace_run=None):
+    active = rows if mode == "communication" else rows[:1]
     gpus = [r["physical_gpu"] for r in active]
     out = root / mode
     out.mkdir()
@@ -34,7 +34,21 @@ def phase(work, root, image, policy, rows, mode):
             f"--master_port={port}",
             "--nproc_per_node=8",
         ]
-    command += ["/opt/recipes/scripts/seven_layer/health.py", mode, "--output", "/outputs"]
+    if mode == "q-up-replay":
+        if trace_run is None:
+            raise ValueError("Q-up replay requires saved real paired trace operands")
+        command += [
+            "-m",
+            "examples.operators.dsv4_4l.replay_q_up",
+            "--trace-run",
+            mapped(work, trace_run),
+            "--model",
+            "/experiment/models/DeepSeek-V4-Flash-7L",
+            "--output",
+            "/outputs",
+        ]
+    else:
+        command += ["/opt/recipes/scripts/seven_layer/health.py", mode, "--output", "/outputs"]
     write(out / "command.json", command)
     cid = subprocess.check_output(command, text=True).strip()
     write(out / "container.json", dict(id=cid, mode=mode))
@@ -72,7 +86,7 @@ def phase(work, root, image, policy, rows, mode):
     return dict(status="PASS", seconds=time.monotonic() - started, ranks=records)
 
 
-def qualify(work, runtime_lock, resource_policy):
+def qualify(work, runtime_lock, resource_policy, *, q_up_trace=None):
     info = json.loads(runtime_lock.read_text())
     policy = json.loads(resource_policy.read_text())
     root = work / "evidence" / ("health-" + uuid4().hex[:12])
@@ -90,6 +104,10 @@ def qualify(work, runtime_lock, resource_policy):
     try:
         result["single"] = phase(work, root, image, policy, rows, "single")
         result["communication"] = phase(work, root, image, policy, rows, "communication")
+        if q_up_trace:
+            result["q_up_diagnostic_replay"] = phase(
+                work, root, image, policy, rows, "q-up-replay", trace_run=q_up_trace
+            )
         result.update(status="PASS", communication_world_size=8)
     except BaseException as error:
         result.update(status="FAIL", error=str(error))
