@@ -16,7 +16,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from matrix import profiles
-from report import summarize
+from matrix_report import summarize
 from watch import snapshot
 
 ROOT = Path(__file__).resolve().parents[2]
