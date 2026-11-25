@@ -18,13 +18,14 @@ from uuid import uuid4
 
 from matrix import profiles
 from matrix_report import summarize
+from resource_policy import ResourceConflict, evaluate
 from watch import snapshot
 
 ROOT = Path(__file__).resolve().parents[2]
 import sys
 
 sys.path.insert(0, str(ROOT / "scripts"))
-from node import allocation, idle  # noqa: E402
+from node import allocation  # noqa: E402
 
 
 def write(path, value):
@@ -35,13 +36,19 @@ def write(path, value):
     pending.replace(path)
 
 
+def resource_policy(root):
+    path = root / "resource-policy-lock.json"
+    return json.loads(path.read_text()) if path.exists() else None
+
+
 def wait_idle(root, gpus):
     while True:
         try:
             sample = snapshot(gpus)
             with (root / "gpu-samples.jsonl").open("a") as f:
                 f.write(json.dumps(sample) + "\n")
-            idle(gpus)
+            receipt = evaluate(sample, resource_policy(root))
+            write(root / "latest-preflight.json", receipt)
             return
         except (RuntimeError, subprocess.CalledProcessError) as e:
             write(
@@ -185,6 +192,7 @@ def launch(
     # Creating a container is not a reservation; guard again immediately at actual start.
     wait_idle(run, gpus)
     began = time.monotonic()
+    next_sample = 0.0
     with (out / "driver.log").open("w") as log:
         proc = subprocess.Popen(["docker", "start", "-a", cid], stdout=log, stderr=subprocess.STDOUT)
         while proc.poll() is None:
@@ -198,10 +206,28 @@ def launch(
                 if label == run.name:
                     subprocess.run(["docker", "stop", "--time", "30", cid], check=True)
                 raise TimeoutError("own phase exceeded two-hour timeout; retained logs and checkpoints")
-            if int(elapsed) % 30 == 0:
+            if elapsed >= next_sample:
+                next_sample = elapsed + 5
                 sample = snapshot(gpus)
                 with (run / "gpu-samples.jsonl").open("a") as f:
                     f.write(json.dumps(sample) + "\n")
+                try:
+                    evaluate(sample, resource_policy(run), own_container=cid)
+                except ResourceConflict as error:
+                    write(out / "external-conflict.json", dict(error=str(error), sample=sample))
+                    label = subprocess.check_output(
+                        [
+                            "docker",
+                            "inspect",
+                            '--format={{index .Config.Labels "rl-align.seven-layer-N"}}',
+                            cid,
+                        ],
+                        text=True,
+                    ).strip()
+                    if label == run.name:
+                        subprocess.run(["docker", "stop", "--timeout", "15", cid], check=True)
+                    proc.wait()
+                    raise
         code = proc.returncode
     record = dict(
         action=action,
@@ -217,6 +243,14 @@ def launch(
     )
     write(out / "execution.json", record)
     if code:
+        log_text = (out / "driver.log").read_text(errors="replace")
+        if any(
+            token in log_text
+            for token in ["DistBackendError", "ncclSystemError", "ncclUnhandled", "NCCL error", "RCCL error"]
+        ):
+            raise ResourceConflict(
+                "distributed communication error; stop this experiment and retain evidence"
+            )
         raise RuntimeError(f"{profile['id']} {action} exited {code}; see {out}/driver.log")
     return record
 
@@ -405,7 +439,7 @@ def training(work, run, rows, image, profile, initial_policy, dataset):
     return result
 
 
-def run(work, image, gpus, groups, runtime_lock):
+def run(work, image, gpus, groups, runtime_lock, shared_policy, health_receipt, fixed_actor=None):
     targets = {p["id"]: p for p in profiles()[:4]}
     if not groups or len(set(groups)) != len(groups) or set(groups) - set(targets):
         raise ValueError("select unique implemented primary groups N1..N4")
@@ -422,6 +456,23 @@ def run(work, image, gpus, groups, runtime_lock):
             datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid4().hex[:8]
         )
         run_root.mkdir()
+        if not health_receipt:
+            raise ValueError("single-GPU health and eight-GPU communication receipt required")
+        health = json.loads(health_receipt.read_text())
+        if (
+            health["status"] != "PASS"
+            or health["image_id"] != image
+            or health["communication_world_size"] != 8
+        ):
+            raise ValueError("health/communication receipt does not qualify this exact runtime image")
+        if shared_policy:
+            policy = json.loads(shared_policy.read_text())
+            import hashlib
+
+            if health["resource_policy_sha256"] != hashlib.sha256(shared_policy.read_bytes()).hexdigest():
+                raise ValueError("shared exception changed since health qualification")
+            write(run_root / "resource-policy-lock.json", policy)
+        write(run_root / "health-receipt.json", health)
         rows = allocation(gpus)
         write(run_root / "allocation.json", rows)
         runtime = json.loads(runtime_lock.read_text())
@@ -446,8 +497,25 @@ def run(work, image, gpus, groups, runtime_lock):
         )
         write(run_root / "summary.json", summary)
         summarize(run_root)
-        common = run_root / "common-fixed-actor"
-        launch(work, run_root, rows, image, primary[0], "actor-score", common)
+        common = fixed_actor or run_root / "common-fixed-actor"
+        if fixed_actor:
+            score = json.loads((common / "scores.json").read_text())
+            import hashlib
+
+            if (
+                score["input_suite_sha256"]
+                != hashlib.sha256((work / "evidence/fixed-input-suite.json").read_bytes()).hexdigest()
+                or score["producer"]["weight_version"] != 0
+            ):
+                raise ValueError("retained actor snapshot/suite/version does not qualify")
+            write(
+                run_root / "retained-fixed-actor.json",
+                dict(
+                    path=str(common), scope="actual prior independent actor forward; original snapshot only"
+                ),
+            )
+        else:
+            launch(work, run_root, rows, image, primary[0], "actor-score", common)
         initial_policy = common / "policy-v0.pt"
         for profile in primary:
             name = profile["id"]
@@ -460,17 +528,12 @@ def run(work, image, gpus, groups, runtime_lock):
                     work, run_root, image, profile, common, rollout, initial_policy, rollout
                 )
                 summary[name].update(fixed_weight="PASS", fixed_verification=verification)
-            except Exception as e:
-                summary[name].update(status="FAIL", error=str(e))
-            write(run_root / "summary.json", summary)
-            summarize(run_root)
-        for profile in primary:
-            name = profile["id"]
-            if summary[name]["fixed_weight"] != "PASS":
-                continue
-            try:
+                write(run_root / "summary.json", summary)
+                summarize(run_root)
                 correct = training(work, run_root, rows, image, profile, initial_policy, "copy")
                 summary[name].update(status="CORRECTNESS_PASS", updates=correct["completed_updates"])
+            except ResourceConflict:
+                raise
             except Exception as e:
                 summary[name].update(status="FAIL", error=str(e))
                 partial = run_root / name / "copy/steps.json"
@@ -492,6 +555,8 @@ def run(work, image, gpus, groups, runtime_lock):
             try:
                 target = training(work, run_root, rows, image, profile, initial_policy, "dapo")
                 summary[name].update(target_load="PASS", target_updates=target["completed_updates"])
+            except ResourceConflict:
+                raise
             except Exception as e:
                 summary[name].update(target_load="FAIL", target_error=str(e))
             write(run_root / "summary.json", summary)
@@ -515,8 +580,20 @@ def main():
     ap.add_argument("--gpus", nargs="+", type=int, required=True)
     ap.add_argument("--groups", nargs="+", choices=["N1", "N2", "N3", "N4"], required=True)
     ap.add_argument("--runtime-lock", type=Path, required=True)
+    ap.add_argument("--resource-policy", type=Path)
+    ap.add_argument("--health-receipt", type=Path, required=True)
+    ap.add_argument("--fixed-actor", type=Path)
     args = ap.parse_args()
-    run(args.work.resolve(), args.image, args.gpus, args.groups, args.runtime_lock.resolve())
+    run(
+        args.work.resolve(),
+        args.image,
+        args.gpus,
+        args.groups,
+        args.runtime_lock.resolve(),
+        args.resource_policy,
+        args.health_receipt,
+        args.fixed_actor,
+    )
 
 
 if __name__ == "__main__":
