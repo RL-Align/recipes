@@ -1,0 +1,143 @@
+{
+  "time": "2026-11-25T12:14:00.465722+00:00",
+  "scope": "Revised N1-N4 actual native phase execution. GPU acceptance pending; N5 EP4 not implemented and gated. Original M matrix superseded.",
+  "argv": [
+    "python3",
+    "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/recipes/scripts/seven_layer/execute.py",
+    "--work",
+    "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z",
+    "--image",
+    "sha256:8f1f79c09146d86474f2568a22c61bb1fe60fabe621ce1399a40ef18c9243932"
+  ],
+  "cwd": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z",
+  "prerequisites": [
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/runtime/runtime-N.lock.json",
+      "sha256": "8144b535e047a1af5b9028e3055a7a52eae2cb35f1adaefb770237ffb47b6f85"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/models/DeepSeek-V4-Flash-7L/checkpoint.lock.json",
+      "sha256": "3325f0616dc8ef1be889f5f8259d115d61b5da9b8d883c5dc67cdfd2a017e851"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/models/DeepSeek-V4-Flash-7L/model.safetensors",
+      "sha256": "62cbd4407a498f44552b1d2216b1f1a6b7cc5fac105669b4c0a3f8f2e73bebfe"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/models/DeepSeek-V4-Flash-7L/config.json",
+      "sha256": "67033f254e8779d205f0a14661e33e8a746b5ddf2c71287a01f3866037b48271"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/models/DeepSeek-V4-Flash-7L/tokenizer.json",
+      "sha256": "8f9f37ca37fdc4f5fd36d5cf4d3b0e8392edb4e894fd10cc0d70b4957c8633cf"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/models/DeepSeek-V4-Flash-7L/tokenizer_config.json",
+      "sha256": "6ac8c8dc065ed118161d02dd532749ae3f52c243deac27872134fae2f50d8547"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/evidence/fixed-input-suite.json",
+      "sha256": "61a31ee90248bdc0899b0767680b65f14f94ef681a1d3fed899508c3e13ce525"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/data/requests-N/requests.lock.json",
+      "sha256": "480c5cf09aa911731fe06c896dcd8ba39b0ac66d941e3ca3dfe48b4ca3fb1fcd"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/evidence/data.lock.json",
+      "sha256": "fd11697f1d41cad7e2fe532e07deb7ddd07d194afc772c816f6cf3277beca0ba"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/data/requests-N/dapo-step4.json",
+      "sha256": "4f63763250ff85de433998810ee4d963805c7e9eefac0164e34fec5c767d6520"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/data/requests-N/dapo-step2.json",
+      "sha256": "d126f26fd2db3ddb925ab6089def82c5f62a32cd96c0b0b4a6efbd77664abd29"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/data/requests-N/dapo-step1.json",
+      "sha256": "6009199965c1f2fb9ca33b320c8f553eba3c3f6ca461cfb782c0956dc4872119"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/data/requests-N/copy-step3.json",
+      "sha256": "1714576b4703fb3cd0ec4a752e27de43fc8c87512da4ef8360f98adf5abef6b1"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/data/requests-N/copy-step1.json",
+      "sha256": "bc383ac2d7f10f49f3092549afd1b24161c7cecf9417621613968595572185ea"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/data/requests-N/dapo-step3.json",
+      "sha256": "caa1b79e2524c9d46f18edb05ccc599e2feaa561a05b34d934a36a5a8a13932f"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/data/requests-N/copy-step2.json",
+      "sha256": "01561e84e9bd0d71907ea75ad1a3a1c9c558614711959aa29b2898d3ef7b0d59"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/data/requests-N/copy-step4.json",
+      "sha256": "3e7c90a26b97f16094f0f0b583a46f431e7ad2b2cf0c79d831525db857bc49a7"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/profiles/N5.json",
+      "sha256": "1adb9896fc4a6f3e2cbd9309b97194bc9d3da6db3915b84acba694ba3e095ca9"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/profiles/N4.json",
+      "sha256": "fe518d30010f22767ccc80162a4b1567567eea760433471413e9cb24b948620b"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/profiles/N1.json",
+      "sha256": "b8dd6bce6eccab7abe17b04093b35bd239a5ae4aab5a429060d69c07227e2720"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/profiles/N2.json",
+      "sha256": "122fa0ab5631a846b260ec3a22683a7a1a96d3b46dbe087e1dd7e6acd0b11b11"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/profiles/N3.json",
+      "sha256": "e8c19f418097dba29a8414d245dcfeb688c1e34d36229b6e162f012009331ac8"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/recipes/scripts/seven_layer/execute.py",
+      "sha256": "85d215712ddd7c5d9c0c04af56feb6d09b05f77a22323f35ecf23d4dd1cf7c4a"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/recipes/scripts/seven_layer/matrix.py",
+      "sha256": "6bb3beb49eace26a5161a5fe788fa6a3b990c9408d6349ce6459e116cf9e0100"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/recipes/scripts/seven_layer/watch.py",
+      "sha256": "eb18cd7195ef2c8291ece3bb6c4182d8debd1aa83252b31dd51d1ef540bacec2"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/recipes/scripts/node.py",
+      "sha256": "3c1186249ea192e67759e603b7dc10794c976523151c049d4694c1ad3044b29c"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/evidence/runtime-audit-N-final.json",
+      "sha256": "4793d5a7c56bc80bef926bbedafbd8bf7ab22b59d0d51c31d0e2daa85b87401b"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/recipes/scripts/seven_layer/matrix_report.py",
+      "sha256": "72df6fdd43d06773c2e64cafeca97ec05e6ee3c59445ae39aa1afec0cd04bdf0"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/logs/N-final-fixed-image-kernel-cpu.log",
+      "sha256": "4896cd4cc380bfe50d79037ea53809af5c94d064a3620ede2b12e8c7399f2439"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/logs/N-final-fixed-image-verl-cpu.log",
+      "sha256": "8716d5d0507ac8cc96baf1ac8656bc2c28d06cfe7447e0fd48cc3984c6fba729"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/logs/N-final-fixed-image-recipes-cpu.log",
+      "sha256": "0a60f349259076f4c5738d51cd796dac9ff1d78ceff0f69679a7e419aff4a9c7"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/logs/N-final-fixed-image-cli-cpu.log",
+      "sha256": "0f95751db4cac7c2f5a2ddd644537c229a94ffaa3c8a5a666880357c57f583fa"
+    }
+  ]
+}

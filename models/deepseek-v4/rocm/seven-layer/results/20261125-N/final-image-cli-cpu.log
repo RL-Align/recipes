@@ -1,0 +1,11 @@
+usage: execute.py [-h] --work WORK --image IMAGE
+
+Resource-gated revised N1-N4 fixed scoring and three-update phase execution.
+N5 is follow-up and cannot be launched by startup/CPU success. Every actual
+phase runs committed image code; one phase exits before another uses physical
+GPUs.
+
+options:
+  -h, --help     show this help message and exit
+  --work WORK
+  --image IMAGE

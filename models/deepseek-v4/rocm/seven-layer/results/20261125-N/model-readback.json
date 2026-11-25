@@ -1,0 +1,46 @@
+{
+  "status": "PASS",
+  "scope": "CPU-only original-byte checkpoint extraction/readback; no model execution",
+  "source_revision": "60d8d70770c6776ff598c94bb586a859a38244f1",
+  "safetensors_sha256": "62cbd4407a498f44552b1d2216b1f1a6b7cc5fac105669b4c0a3f8f2e73bebfe",
+  "bytes": 27164886180,
+  "tensors": 11002,
+  "layers": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "compress_ratios": [
+    0,
+    0,
+    4,
+    128,
+    4,
+    128,
+    4
+  ],
+  "per_layer_tensor_count": {
+    "None": 6,
+    "0": 1565,
+    "1": 1565,
+    "2": 1576,
+    "3": 1569,
+    "4": 1576,
+    "5": 1569,
+    "6": 1576
+  },
+  "dtypes": {
+    "BF16": 65,
+    "F32": 64,
+    "F8_E8M0": 5435,
+    "F8_E4M3": 59,
+    "I8": 5376,
+    "I64": 3
+  },
+  "trainable_candidates": 129,
+  "runtime_trainability_verified": false
+}

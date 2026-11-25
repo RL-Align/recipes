@@ -1,0 +1,17 @@
+{
+  "model_sha256": "62cbd4407a498f44552b1d2216b1f1a6b7cc5fac105669b4c0a3f8f2e73bebfe",
+  "tokenizer_sha256": "8f9f37ca37fdc4f5fd36d5cf4d3b0e8392edb4e894fd10cc0d70b4957c8633cf",
+  "builder": "verl.utils.tokenizer.deepseek.DeepSeekV4ContinuousTokenBuilder",
+  "builder_source_sha256": "f761c2c112b6f7310958f9dd43177b93fbcf022908d2e493ed0ef9b53a7cb063",
+  "files": {
+    "dapo-step4.json": "4f63763250ff85de433998810ee4d963805c7e9eefac0164e34fec5c767d6520",
+    "dapo-step2.json": "d126f26fd2db3ddb925ab6089def82c5f62a32cd96c0b0b4a6efbd77664abd29",
+    "dapo-step1.json": "6009199965c1f2fb9ca33b320c8f553eba3c3f6ca461cfb782c0956dc4872119",
+    "copy-step3.json": "1714576b4703fb3cd0ec4a752e27de43fc8c87512da4ef8360f98adf5abef6b1",
+    "copy-step1.json": "bc383ac2d7f10f49f3092549afd1b24161c7cecf9417621613968595572185ea",
+    "dapo-step3.json": "caa1b79e2524c9d46f18edb05ccc599e2feaa561a05b34d934a36a5a8a13932f",
+    "copy-step2.json": "01561e84e9bd0d71907ea75ad1a3a1c9c558614711959aa29b2898d3ef7b0d59",
+    "copy-step4.json": "3e7c90a26b97f16094f0f0b583a46f431e7ad2b2cf0c79d831525db857bc49a7"
+  },
+  "scope": "CPU input preparation only; no GPU/reward/update acceptance"
+}

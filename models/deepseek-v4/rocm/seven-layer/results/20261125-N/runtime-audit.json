@@ -1,0 +1,97 @@
+{
+  "scope": "CPU source/runtime audit only; no GPU model execution",
+  "image_id": "sha256:8f1f79c09146d86474f2568a22c61bb1fe60fabe621ce1399a40ef18c9243932",
+  "torch_version": "2.13.0+rocm10.0.0",
+  "hip": "7.15.26333",
+  "sources": {
+    "RL-Kernel": {
+      "commit": "94f09c3b948bf59d396b5492d20853c1c52bfbad",
+      "tree": "075353e8f208d8a49cfaae32ef18404365c08b96",
+      "dirty": false,
+      "import_path": "/opt/dsv4/RL-Kernel/rl_engine/__init__.py"
+    },
+    "verl": {
+      "commit": "507f46e1e1a8fe9cb4c505bda95df63f0d525b2b",
+      "tree": "460f533c2e764ce7f05107d83e22c6e77f656c06",
+      "dirty": false,
+      "import_path": "/opt/dsv4/verl/verl/__init__.py"
+    },
+    "vllm": {
+      "commit": "c07d58dc82d75f7d1a947b3264b460384ec3e18d",
+      "tree": "f13f8381086e06fceaf36c42d7751390e3bdbc1d",
+      "dirty": false,
+      "import_path": "/opt/dsv4/vllm/vllm/__init__.py"
+    },
+    "Megatron-LM": {
+      "commit": "97b50bdd936022ef58031c35db6d10581c181be0",
+      "tree": "4777ae138de517deda1861d66c6e688b9d0627cd",
+      "dirty": false,
+      "import_path": "/opt/dsv4/Megatron-LM/megatron/core/__init__.py"
+    }
+  },
+  "versions": {
+    "torch": "2.13.0+rocm10.0.0",
+    "vllm": "0.34.0rc1.dev366+gc07d58dc8",
+    "megatron-core": "0.21.0+97b50bd",
+    "megatron-bridge": "0.7.0",
+    "transformer-engine": "2.21.0.dev0",
+    "triton": "3.8.0+git669b31ac",
+    "ray": "2.60.0",
+    "verl": "0.10.0.dev0",
+    "amd-aiter": "0.1.29"
+  },
+  "binaries": {
+    "/opt/dsv4/vllm/vllm/_C.abi3.so": {
+      "bytes": 11727584,
+      "sha256": "b6565abb4a09e5253628799fb48f2bf1341b021326ca533d4200ff8c0cebefb7"
+    },
+    "/opt/dsv4/vllm/vllm/_C_stable_libtorch.abi3.so": {
+      "bytes": 70505824,
+      "sha256": "3e98ac2cf3e038eb3c8a58cb6e12ecd930de73441f722fc57dde23c1c4988dd7"
+    },
+    "/opt/dsv4/vllm/vllm/_moe_C_stable_libtorch.abi3.so": {
+      "bytes": 21061824,
+      "sha256": "4df3e3297d26b5a118e4238c106ec4dafb8b2c0ef6d706a1a65969d893452b37"
+    },
+    "/opt/dsv4/vllm/vllm/_rocm_C.abi3.so": {
+      "bytes": 37641984,
+      "sha256": "fd02cd557095e35d2b2c1414a081088f1f75a7f8370c06170d5a58ea43aed05a"
+    },
+    "/opt/dsv4/vllm/vllm/cumem_allocator.abi3.so": {
+      "bytes": 83920,
+      "sha256": "b57a6f91486dd6e40b00fa257c4c61d5f405ea0236d05b36c528f3aaafb7f453"
+    },
+    "/opt/dsv4/vllm/vllm/fs_io_C.abi3.so": {
+      "bytes": 173728,
+      "sha256": "1bdb73282dbe106c922adbe6b5e0599626ddefaa0c3e9a9ad3112f5a60ed52b4"
+    },
+    "/opt/dsv4/vllm/vllm/spinloop.abi3.so": {
+      "bytes": 24608,
+      "sha256": "4831077ab095b21d9dd7e064160607e3a98e83802ca1a3a051cd4873abed0a90"
+    },
+    "/opt/dsv4/TransformerEngine/libtransformer_engine.so": {
+      "bytes": 291824784,
+      "sha256": "0da08d96fe55ecf753c8d5de46f7688b5c52d335c5ec36a850e12976cc1ebf98"
+    },
+    "/opt/dsv4/TransformerEngine/transformer_engine/lib/libck_fused_attn.so": {
+      "bytes": 623056,
+      "sha256": "4cf9cc25ebc545cd27cca228e1cfc55fa04f1dbf050d284bf4c5248292c17d02"
+    },
+    "/opt/dsv4/TransformerEngine/transformer_engine/lib/libkittens_gemm.so": {
+      "bytes": 34946952,
+      "sha256": "2abca44711b5ce5b4aa8585ecb7bee56845fcbdcdcab9937406828bc009e4ed1"
+    },
+    "/opt/dsv4/TransformerEngine/transformer_engine/lib/te_libmha_bwd.so": {
+      "bytes": 8812288,
+      "sha256": "36cecf03ffdfa356a1e3a84106fa3dee5ee797d91145d53bd46c1df301b08677"
+    },
+    "/opt/dsv4/TransformerEngine/transformer_engine/lib/te_libmha_fwd.so": {
+      "bytes": 2838632,
+      "sha256": "35ae32ec12ae2d533a93af82cefe81921daf262924f3a4bd0837754a5c639f77"
+    },
+    "/opt/dsv4/TransformerEngine/transformer_engine_torch.cpython-312-x86_64-linux-gnu.so": {
+      "bytes": 6038824,
+      "sha256": "08688a19bdb08a3f0d2dab52500d7259159ebe52419a5f90c00305ebbe0177d1"
+    }
+  }
+}
