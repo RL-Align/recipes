@@ -1,0 +1,28 @@
+{
+  "engine": "verl.TrainingWorker.infer_batch",
+  "weight_version": 0,
+  "role": "actor",
+  "rank": 0,
+  "pid": 15,
+  "topology": {
+    "pp": 2,
+    "tp": 1,
+    "ep": 1,
+    "etp": 1,
+    "dp": 1,
+    "expert_dp": 1,
+    "cp": 1,
+    "gpus": 2,
+    "sequence_parallel": false
+  },
+  "original_layers": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "logical_gpu": 0,
+  "pci_bus_id": "0000:a3:00.0",
+  "architecture": "gfx942:sramecc+:xnack-",
+  "device_name": "AMD Instinct MI300X VF"
+}

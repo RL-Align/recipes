@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "authorization": "User explicitly authorizes recorded inactive GPU0 context exception; never kill external task",
+  "shared_contexts": [
+    {
+      "identity": {
+        "pid": 3131740,
+        "uid": 0,
+        "start_ticks": 132312241,
+        "cmdline_sha256": "47b96bbf14a9490539f07c5e7c3f283ee0e17c7dcebf12fa9677ded5d1bd0668",
+        "cgroup_sha256": "f16248cf978ce57b3d379c78c174e85ce76def180a3f9c1fc932a798599bdde3",
+        "cgroup": "0::/system.slice/docker-badec208aec1442118231db8e03f9c8c40bff4060189880fba6d93a563bc5fd9.scope\n",
+        "command": "/workspace/experiments/d3-single-gpu-20261112-1117/venv-fla/bin/python -u /workspace/experiments/tq-packed-pp-20261112-102123/cooperative-20261112-142903/profile_operator.py --repository /workspace/experiments/tq-packed-pp-20261112-102123/quantizer --model /workspace/models/d3-ultra-TQ4-ccdcfa611649/d3-ultra-TQ4.mfq --implementation /workspace/experiments/tq-packed-pp-20261112-102123/cooperative-20261112-142903 "
+      },
+      "physical_gpus": [
+        0
+      ],
+      "max_process_vram_bytes": 268435456,
+      "baseline_sdma_used": 836
+    }
+  ],
+  "idle_vram_limit_bytes": 1073741824,
+  "budget": {
+    "planned_peak_bytes_per_gpu": 137438953472,
+    "reserve_bytes": 8589934592,
+    "minimum_free_bytes_during_run": 4294967296
+  },
+  "stability_samples": [
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/evidence/shared-GPU0-evaluation/sample-0.json",
+      "sha256": "2920336f6b5d7ccd12fe412178e3a906ece6326deb9bb8c8c6b2dc7946d003f7"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/evidence/shared-GPU0-evaluation/sample-1.json",
+      "sha256": "0ad96caa8a65e819d02c6eec3f31c6c8bf2a5f5e31af51e1836b1f1c6b8a5c23"
+    },
+    {
+      "path": "/scratch/rl-kernel/vensen/dsv4-7l-matrix-20261125T1052Z/evidence/shared-GPU0-evaluation/sample-2.json",
+      "sha256": "2582582eadaa155fc819dea438db400efc3a2deff1215a0f5ea9709e1a3544c7"
+    }
+  ]
+}
