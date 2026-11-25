@@ -213,6 +213,8 @@ Both short runs must use the same image, model and allocation as the long run.
 The math short run must also use the same dataset and load. This requests 200
 optimizer updates, not 200 epochs.
 
+Math preparation uses the same native DeepSeek-V4 Continuous Token encoder as AgentLoop; the delivered tokenizer intentionally has no Jinja chat template. DAPO's original parquet is retained and its SHA256 is checked against the LFS digest at the locked revision. Published row order and ground truth are preserved.
+
 Math prompts are capped at 1,024 tokens. Actual response lengths and token
 counts are recorded. Zero advantages, invalid gradients or any raw FP32
 train/rollout logprob bit mismatch fail the run.
