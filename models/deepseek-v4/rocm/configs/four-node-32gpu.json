@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "recipe": "deepseek-v4/rocm",
+  "topology": "four-node-32gpu",
+  "profile": "smoke",
+  "dataset": "copy",
+  "work_dir": "/shared/dsv4-recipe",
+  "model_dir": "/shared/dsv4-recipe/assets/model",
+  "baseline_data_dir": "/shared/dsv4-recipe/assets/final-data",
+  "nodes": [
+    {
+      "name": "node-0",
+      "ssh": "local",
+      "ip": "10.0.0.10",
+      "gpus": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ]
+    },
+    {
+      "name": "node-1",
+      "ssh": "rl-kernel@node-1",
+      "ip": "10.0.0.11",
+      "gpus": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ]
+    },
+    {
+      "name": "node-2",
+      "ssh": "rl-kernel@node-2",
+      "ip": "10.0.0.12",
+      "gpus": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ]
+    },
+    {
+      "name": "node-3",
+      "ssh": "rl-kernel@node-3",
+      "ip": "10.0.0.13",
+      "gpus": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ]
+    }
+  ],
+  "network": {
+    "ray_port": 16379,
+    "ifname": "",
+    "rdma": false
+  },
+  "gates": {
+    "correctness_run": "",
+    "math_smoke_run": ""
+  },
+  "gpu_arch": "gfx942",
+  "numa_interleave": false
+}

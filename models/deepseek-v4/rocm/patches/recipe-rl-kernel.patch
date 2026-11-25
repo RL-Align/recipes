@@ -1,0 +1,164 @@
+diff --git a/examples/operators/dsv4_4l/verify_grpo.py b/examples/operators/dsv4_4l/verify_grpo.py
+index 3416787c..dc9ce093 100644
+--- a/examples/operators/dsv4_4l/verify_grpo.py
++++ b/examples/operators/dsv4_4l/verify_grpo.py
+@@ -143,13 +143,30 @@ def verify_dp_step(ranks, identities, dp_size):
+                 assert other[state]["state_scalars"] == first[state]["state_scalars"]
+ 
+ 
++def recipe_workload(root):
++    from omegaconf import OmegaConf
++    config = OmegaConf.load(Path(root).parent / "hydra/.hydra/config.yaml")
++    steps = int(config.trainer.total_training_steps)
++    responses = int(config.data.train_batch_size) * int(config.actor_rollout_ref.rollout.n)
++    if steps not in (3, 200) or responses not in (4, 16, 128):
++        raise ValueError("unrecognized recipe step/response workload")
++    assert config.actor_rollout_ref.actor.ppo_epochs == 1
++    assert config.actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu == 1
++    assert config.actor_rollout_ref.actor.ppo_mini_batch_size == config.data.train_batch_size
++    assert int(config.rlk.get("stress_final_repeats", 0)) == 0
++    return config, steps, responses
++
++
+ def verify(root, inventory):
+     from verl.experimental.rl_kernel.cluster_contract import topology
+ 
+     root = Path(root)
+     config = root.parent / "hydra/.hydra/config.yaml"
+     raw = json.loads((root / "sync-v0-raw.json").read_text())
++    declared, steps, responses = recipe_workload(root)
+     replicas = len(raw.get("replicas", [None]))
++    expected_plan = topology(declared)
++    assert replicas == expected_plan["rollout_replicas"]
+     if replicas == 1:
+         return _verify_replica(root, inventory)
+     if not config.exists():
+@@ -157,11 +174,18 @@ def verify(root, inventory):
+     from omegaconf import OmegaConf
+ 
+     plan = topology(OmegaConf.load(config))
+-    assert plan["rollout_replicas"] == replicas == 2 and plan["actor_dp_size"] == 2
++    assert plan["rollout_replicas"] == replicas
++    assert (plan["actor_world_size"], replicas) in ((4, 2), (16, 8))
+     results = [
+-        _verify_replica(root, inventory, replica_rank=i, actor_count=4) for i in range(replicas)
++        _verify_replica(root, inventory, replica_rank=i, actor_count=plan["actor_world_size"]) for i in range(replicas)
+     ]
+-    placement = json.loads((root / "single-node-placement.json").read_text())
++    if plan["enabled"]:
++        preflight = json.loads((root / "cluster-preflight.json").read_text())
++        placement = json.loads((root / "cluster-placement.json").read_text())
++        assert preflight["plan"] == plan
++        placement = dict(plan=plan, nodes=preflight["nodes"], **placement)
++    else:
++        placement = json.loads((root / "single-node-placement.json").read_text())
+     from verl.experimental.rl_kernel.cluster_contract import verify_placement
+ 
+     assert placement["plan"] == plan
+@@ -183,20 +207,20 @@ def verify(root, inventory):
+             assert worker_key(stage) == placed["worker_identity"]
+             assert stage["node_id"] == placed["node_id"]
+             assert stage["device_identity"]["pci_bus_id"] == placed["pci_bus_id"]
+-    for version in range(4):
++    for version in range(steps + 1):
+         name = "initial-v0.json" if version == 0 else f"post-update-v{version}.json"
+         summary = json.loads((root / name).read_text())
+         assert summary["weight_version"] == summary["global_steps"] == version
+         assert summary["finite"] and summary["batch_invariance"]
+         assert summary["mismatch_count"] == summary["mean_abs_diff"] == summary["max_abs_diff"] == 0
+-        assert {r["replica_rank"] for r in summary["replicas"]} == {0, 1}
++        assert {r["replica_rank"] for r in summary["replicas"]} == set(range(replicas))
+         for key in ("expected_tokens", "compared_tokens"):
+             assert summary[key] == sum(result["versions"][version][key] for result in results)
+     summary = dict(
+         status="PASS",
+         scope=(
+-            "Single-node eight-GPU four-layer native verl GRPO, "
+-            "actor PP2/DP2 and two PP2 rollout replicas."
++            f"Four-layer native verl GRPO: actor PP2/DP{plan['actor_dp_size']}, "
++            f"{replicas} PP2 rollout replicas; {steps} continuous updates."
+         ),
+         dp_gradient_reduction=True,
+         full_quantized_base_training=False,
+@@ -220,6 +244,7 @@ def _verify_replica(root, inventory, *, replica_rank=0, actor_count=2):
+     original = json.loads(Path(inventory).read_text())
+     original_state = original["sync_eligible_original_tensors"]
+     root = Path(root)
++    declared, steps, responses = recipe_workload(root)
+     audit_root = root if actor_count == 2 else root / f"replica-{replica_rank}"
+     dp_size = actor_count // 2
+     job = root.parent
+@@ -251,7 +276,7 @@ def _verify_replica(root, inventory, *, replica_rank=0, actor_count=2):
+         ("A", "C"),
+         ("C", "A"),
+     ]
+-    for version in range(4):
++    for version in range(steps + 1):
+         sync = json.loads((root / f"sync-v{version}.json").read_text())
+         rawsync = json.loads((root / f"sync-v{version}-raw.json").read_text())
+         sync["stages"] = replica_stages(sync, replica_rank)
+@@ -391,7 +416,7 @@ def _verify_replica(root, inventory, *, replica_rank=0, actor_count=2):
+             )
+             assert batch["weight_version"] == version - 1 and batch["global_steps"] == version
+             native = batch["native_agent_loop"]
+-            assert len(native["metrics"]) == len(native["extra_fields"]) == 4
++            assert len(native["metrics"]) == len(native["extra_fields"]) == responses
+             assert all(
+                 m["generate_sequences"] > 0 and m["compute_score"] > 0 for m in native["metrics"]
+             )
+@@ -438,7 +463,7 @@ def _verify_replica(root, inventory, *, replica_rank=0, actor_count=2):
+                     (root / f"native-loss-rank{rank}-v{version}.json").read_text()
+                 )
+                 if identities[rank].get("pipeline_stage", rank) == 1:
+-                    assert len(loss_calls) == 4 // dp_size and all(
++                    assert len(loss_calls) == responses // dp_size and all(
+                         c["finite"]
+                         and c["requires_grad"]
+                         and c["callable"] == "verl.workers.utils.losses.ppo_loss"
+@@ -462,7 +487,7 @@ def _verify_replica(root, inventory, *, replica_rank=0, actor_count=2):
+                 ]:
+                     left = [r for r in stages[0]["pipeline_transfers"] if r["direction"] == send]
+                     right = [r for r in stages[1]["pipeline_transfers"] if r["direction"] == recv]
+-                    assert left and right and len(left) == len(right) == 4 // dp_size
++                    assert left and right and len(left) == len(right) == responses // dp_size
+                     assert all(r["finite"] and r["dp_rank"] == dp for r in left + right)
+                     assert [r["sha256"] for r in sorted(left, key=lambda r: r["microbatch"])] == [
+                         r["sha256"] for r in sorted(right, key=lambda r: r["microbatch"])
+@@ -472,9 +497,10 @@ def _verify_replica(root, inventory, *, replica_rank=0, actor_count=2):
+             metrics = json.loads((root / f"metrics-step{version}.json").read_text())
+             assert metrics["global_steps"] == version and metrics["includes_audit"]
+             if actor_count > 2:
+-                assert metrics["rollout_gpus"] == 4 and metrics["total_job_gpus"] == 8
++                assert metrics["rollout_gpus"] == actor_count
++                assert metrics["total_job_gpus"] == actor_count * 2
+     parity = [json.loads(line) for line in (root / "parity.jsonl").read_text().splitlines()]
+-    assert len(parity) == 7 and all(
++    assert len(parity) == 2 * steps + 1 and all(
+         r["expected_tokens"] == r["compared_tokens"] > 0 and r["mismatch_count"] == 0
+         for r in parity
+     )
+@@ -504,13 +530,13 @@ def _verify_replica(root, inventory, *, replica_rank=0, actor_count=2):
+                 pre["plan"], observed["actor"], observed["rollout"], pre["nodes"]
+             )
+             # Verify placement against actual execution evidence, not just a sidecar.
+-            for rank in (0, 1):
++            for rank in range(actor_count):
+                 identity = identities[rank]
+                 placed = next(r for r in placement["actor"] if r["rank"] == rank)
+                 assert identity["source_identity"]["node_id"] == placed["node_id"]
+                 assert identity["pid"] == placed["pid"]
+                 assert identity["device_identity"]["pci_bus_id"] == placed["pci_bus_id"]
+-            initial = json.loads((root / "sync-v0-raw.json").read_text())["stages"]
++            initial = replica_stages(json.loads((root / "sync-v0-raw.json").read_text()), replica_rank)
+             for stage in initial:
+                 placed = next(
+                     r for r in placement["rollout"] if r["rank"] == stage["pipeline_stage"]
+@@ -524,7 +550,7 @@ def _verify_replica(root, inventory, *, replica_rank=0, actor_count=2):
+         scope=(
+             ("Explicit multi-node four-GPU, " if placement else "Single-node four-GPU, ")
+             + f"four-layer actor PP2/DP{dp_size}, rollout replica {replica_rank} PP2/DP1; "
+-            "three continuous native verl GRPO/PPO updates."
++            f"{steps} continuous native verl GRPO/PPO updates."
+         ),
+         versions=versions,
+         dp_gradient_reduction=dp_size > 1,

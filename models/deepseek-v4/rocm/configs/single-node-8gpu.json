@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "recipe": "deepseek-v4/rocm",
+  "topology": "single-node-8gpu",
+  "profile": "smoke",
+  "dataset": "copy",
+  "work_dir": "/shared/dsv4-recipe",
+  "model_dir": "/shared/dsv4-recipe/assets/model",
+  "baseline_data_dir": "/shared/dsv4-recipe/assets/final-data",
+  "nodes": [
+    {
+      "name": "node-0",
+      "ssh": "local",
+      "ip": "10.0.0.10",
+      "gpus": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ]
+    }
+  ],
+  "network": {
+    "ray_port": 16379,
+    "ifname": "",
+    "rdma": false
+  },
+  "gates": {
+    "correctness_run": "",
+    "math_smoke_run": ""
+  },
+  "gpu_arch": "gfx942",
+  "numa_interleave": false
+}

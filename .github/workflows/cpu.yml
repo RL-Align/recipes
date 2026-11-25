@@ -1,0 +1,28 @@
+name: Recipe CPU contracts
+on: [push, pull_request]
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install pytest hydra-core ruff==0.12.2
+      - run: python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - run: python scripts/sources.py --output /tmp/dsv4-recipe-sources
+      - run: python -m pytest -q
+        env:
+          RLK_RECIPE_TEST_SOURCE: /tmp/dsv4-recipe-sources
+      - run: >-
+          python -m pytest -q --confcutdir=/tmp/dsv4-recipe-sources/verl/tests/experimental/rl_kernel
+          /tmp/dsv4-recipe-sources/verl/tests/experimental/rl_kernel/test_eight_gpu_on_cpu.py
+          /tmp/dsv4-recipe-sources/verl/tests/experimental/rl_kernel/test_multinode_contract_on_cpu.py
+      - run: >-
+          python -m pytest -q --confcutdir=/tmp/dsv4-recipe-sources/RL-Kernel/tests/integrations/common
+          /tmp/dsv4-recipe-sources/RL-Kernel/tests/integrations/common/test_eight_gpu_grpo.py
+        env:
+          PYTHONPATH: /tmp/dsv4-recipe-sources/RL-Kernel
+      - run: ruff check . && ruff format --check .
+      - run: python run.py plan --config models/deepseek-v4/rocm/configs/single-node-8gpu.json
+      - run: python run.py plan --config models/deepseek-v4/rocm/configs/four-node-32gpu.json

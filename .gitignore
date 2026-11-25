@@ -1,0 +1,14 @@
+site.json
+*.local.json
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+artifacts/
+runs/
+*.tar
+*.tar.gz
+*.parquet
+*.safetensors
+*.pt
+*.distcp

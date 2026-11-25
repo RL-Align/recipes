@@ -1,0 +1,2 @@
+# Unified diff context encodes an empty source line as one space.
+models/deepseek-v4/rocm/patches/*.patch -whitespace

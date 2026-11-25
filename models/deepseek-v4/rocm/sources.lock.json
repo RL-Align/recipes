@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "base_image": {
+    "tag": "vensenmu/rl-kernel:pr711-grpo-stress",
+    "reference": "vensenmu/rl-kernel@sha256:f3bf76c2d3863bf5b3f6a912d106a6eb2042ad9898c54f60b1e9015d6aeb225f",
+    "linux_amd64_manifest": "sha256:45307c791baa2db3c4fc6f70be960b301fcc390d3a103d07bdd991f479b2396c",
+    "verified_registry_date": "2026-11-25",
+    "scope": "dependency image; rebuild with the recipe checkout and pinned verl before multi-node execution"
+  },
+  "kernel_base": "71c7cb2d033806632cef1a3678939bf73dc581dd",
+  "verl": "d154f5aa3d9a5a19210bc2df499db6ef6532db90",
+  "vllm": "c07d58dc82d75f7d1a947b3264b460384ec3e18d",
+  "megatron": "97b50bdd936022ef58031c35db6d10581c181be0",
+  "datasets": {
+    "copy": {
+      "source": "examples/operators/dsv4_4l/results/native_grpo_pp2_dp1_20261117/data-manifest.json",
+      "scope": "functional copy-task smoke only"
+    },
+    "dapo": {
+      "repo": "BytedTsinghua-SIA/DAPO-Math-17k",
+      "revision": "65877096c24ffa7abc4e4fa5edb95cf3413a5674"
+    },
+    "gsm8k": {
+      "repo": "openai/gsm8k",
+      "revision": "740312add88f781978c0658806c59bc2815b9866",
+      "subset": "main"
+    }
+  },
+  "checkpoint": {
+    "source_revision": "60d8d70770c6776ff598c94bb586a859a38244f1",
+    "original_layers": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "bytes": 16416050412,
+    "sha256": "1bd423ab1d98f43d40b19617fcb30d973d94436cc7b150fe3f744de79c2de086",
+    "download_url": "https://huggingface.co/RL-Align/DeepSeek-V4-Flash-4L/resolve/4cdbf146efa5e2248349cfa33d4bfb54447c6dfd/dsv4-4l-pr711-model-data.tar.zst",
+    "delivery": "download with prepare --download, or supply the existing unpacked checkpoint and final-data paths",
+    "repo": "RL-Align/DeepSeek-V4-Flash-4L",
+    "revision": "4cdbf146efa5e2248349cfa33d4bfb54447c6dfd",
+    "archive": "dsv4-4l-pr711-model-data.tar.zst",
+    "archive_sha256": "35537489e57688e4497894ba6ad006fb89785d0315df1de26ab19207c051e132"
+  },
+  "baseline_pr": "https://github.com/RL-Align/RL-Kernel/pull/711",
+  "historical_measured": {
+    "kernel": "478caf1a787f6c9d9d3747a45ad79756b6c2c616",
+    "verl": "8196af485ae50e09aa42c1fc6e399f266fb166d3",
+    "scope": "single-node four MI300X, three updates; not the 8/32 GPU runtime"
+  },
+  "paired_patch_source": "https://github.com/RL-Align/RL-Kernel/pull/717#issuecomment-7059960424",
+  "patches": {
+    "eight-gpu-rl-kernel.patch": "b05a28730c9691a035fd34e6299fb243b4838d97aa63116d39a2c1894217c5f0",
+    "eight-gpu-verl.patch": "b9f8ce101da6f4277247794e02b3a1eddaf0af1748231f2d6a4e4bfccd759127",
+    "recipe-verl.patch": "2bdbe697ede9ebb5825bd704445f744fa37bfbd1a91c9eff9a91924a0deef21e",
+    "recipe-rl-kernel.patch": "2a70fee9bb0ff574fd58a480cef2071011f8cdfed69cec9fa45039bdab72800c"
+  },
+  "kernel_tree": "b3499983f8b2dd7fe20d8dec30f88df7926a1b97",
+  "verl_tree": "80ddb00b21ab53f837591562a34b29700db79594",
+  "transformer_engine_source": "b5c00f43283086bf0751f3bf3a179f1e921bbe59",
+  "gfx950_rebuild_reference": "docs/usage/dsv4-mi35x-validation.md at kernel_base"
+}

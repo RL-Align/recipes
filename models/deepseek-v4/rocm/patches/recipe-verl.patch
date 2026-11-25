@@ -1,0 +1,104 @@
+diff --git a/verl/experimental/rl_kernel/cluster_contract.py b/verl/experimental/rl_kernel/cluster_contract.py
+index c767623..708cc8d 100644
+--- a/verl/experimental/rl_kernel/cluster_contract.py
++++ b/verl/experimental/rl_kernel/cluster_contract.py
+@@ -14,10 +14,18 @@ def topology(config):
+     enabled = rlk.get("multinode", False)
+     actor_ips = list(rlk.get("actor_node_ips", []))
+     rollout_ips = list(rollout.get("rlk_node_ips", []))
++    four_node_32 = enabled and all(
++        s["nnodes"] == 2 and s["n_gpus_per_node"] == 8 for s in (trainer, rollout)
++    )
++    if four_node_32 and (
++        len(actor_ips) != 2 or len(rollout_ips) != 2
++        or len(set(actor_ips + rollout_ips)) != 4
++    ):
++        raise ValueError("32-GPU recipe requires two actor and two disjoint rollout nodes")
+     eight_gpu = not enabled and all(s["nnodes"] == 1 and s["n_gpus_per_node"] == 4 for s in (trainer, rollout))
+     for role, settings, ips in [("actor", trainer, actor_ips), ("rollout", rollout, rollout_ips)]:
+         nodes, gpus = settings["nnodes"], settings["n_gpus_per_node"]
+-        layouts = [(1, 4)] if eight_gpu else [(1, 2), (2, 1)]
++        layouts = [(2, 8)] if four_node_32 else ([(1, 4)] if eight_gpu else [(1, 2), (2, 1)])
+         if type(nodes) is not int or type(gpus) is not int or (nodes, gpus) not in layouts:
+             raise ValueError(f"{role}: requires PP2/DP1 on 1x2 or 2x1, or single-node actor4/rollout4")
+         if enabled:
+@@ -35,12 +43,22 @@ def topology(config):
+         rollout_node_ips=rollout_ips,
+         actor_gpus_per_node=trainer["n_gpus_per_node"],
+         rollout_gpus_per_node=rollout["n_gpus_per_node"],
+-        actor_world_size=4 if eight_gpu else 2,
+-        actor_dp_size=2 if eight_gpu else 1,
+-        rollout_replicas=2 if eight_gpu else 1,
++        actor_world_size=16 if four_node_32 else (4 if eight_gpu else 2),
++        actor_dp_size=8 if four_node_32 else (2 if eight_gpu else 1),
++        rollout_replicas=8 if four_node_32 else (2 if eight_gpu else 1),
+     )
+ 
+ 
++def rollout_replica_nodes(node_ips, gpus_per_node, replica_rank):
++    """Pin each PP2 replica to its two GPUs, never reserve all rollout hosts."""
++    ips = list(node_ips)
++    if len(ips) == 2 and gpus_per_node == 8:
++        if type(replica_rank) is not int or not 0 <= replica_rank < 8:
++            raise ValueError("32-GPU recipe requires rollout replica rank 0..7")
++        return [ips[replica_rank // 4]]
++    return ips
++
++
+ def worker_key(record):
+     """Include node/process identity; retain compatibility with measured old evidence."""
+     return record.get("worker_identity", record["pid"])
+@@ -81,6 +99,13 @@ def verify_placement(plan, actor_records, rollout_records, nodes):
+             if node_id not in nodes:
+                 raise RuntimeError("worker node is absent from preflight")
+             ip = nodes[node_id]
++            if role == "rollout" and plan.get("rollout_replicas") == 8:
++                expected_ip = rollout_replica_nodes(
++                    plan["rollout_node_ips"], plan["rollout_gpus_per_node"],
++                    record["replica_rank"],
++                )[0]
++                if ip != expected_ip:
++                    raise RuntimeError("rollout replica was placed on an undeclared node")
+             counts[ip] = counts.get(ip, 0) + 1
+             device = (node_id, record["pci_bus_id"])
+             if device in all_devices:
+diff --git a/verl/experimental/rl_kernel/trainer_rollout.py b/verl/experimental/rl_kernel/trainer_rollout.py
+index e1f8067..2711cd0 100644
+--- a/verl/experimental/rl_kernel/trainer_rollout.py
++++ b/verl/experimental/rl_kernel/trainer_rollout.py
+@@ -35,7 +35,7 @@ class RLKTrainerVLLMServer(RLKPipelineVLLMHttpServer):
+         # These settings affect this dedicated server and its mp children only.
+         os.environ["RLK_NODE_ID"] = ray.get_runtime_context().get_node_id()
+         sync_dir = Path(kwargs["config"].rlk_sync_dir or "/outputs/policy-sync")
+-        if kwargs["config"].nnodes * kwargs["config"].n_gpus_per_node == 4:
++        if kwargs["config"].nnodes * kwargs["config"].n_gpus_per_node > 2:
+             sync_dir /= f"replica-{kwargs['replica_rank']}"
+         os.environ["RLK_SYNC_DIR"] = str(sync_dir)
+         os.environ.update(
+@@ -136,8 +136,12 @@ class RLKTrainerReplica(vLLMReplica):
+     async def init_standalone(self, resource_pool=None):
+         if self.config.rlk_node_ips:
+             from .cluster import pinned_pool
++            from .cluster_contract import rollout_replica_nodes
+ 
+             if resource_pool is not None:
+                 raise ValueError("explicit placement cannot also take an external pool")
+-            resource_pool = pinned_pool(list(self.config.rlk_node_ips), self.gpus_per_replica_node, "rlk-rollout", 2)
++            ips = rollout_replica_nodes(
++                self.config.rlk_node_ips, self.config.n_gpus_per_node, self.replica_rank
++            )
++            resource_pool = pinned_pool(ips, self.gpus_per_replica_node, f"rlk-rollout-{self.replica_rank}", 2)
+         await super().init_standalone(resource_pool)
+diff --git a/verl/experimental/rl_kernel/trainer_sync.py b/verl/experimental/rl_kernel/trainer_sync.py
+index 50ce0fd..2308dff 100644
+--- a/verl/experimental/rl_kernel/trainer_sync.py
++++ b/verl/experimental/rl_kernel/trainer_sync.py
+@@ -35,7 +35,7 @@ class RLKPolicySync:
+         if (
+             not self.root.is_absolute()
+             or len(self.servers) != rollout_replicas
+-            or (actor_world_size, rollout_replicas) not in ((2, 1), (4, 2))
++            or (actor_world_size, rollout_replicas) not in ((2, 1), (4, 2), (16, 8))
+         ):
+             raise ValueError("PP2 actor/rollout layout and absolute shared sync directory are required")
+         self.actor_world_size = actor_world_size
