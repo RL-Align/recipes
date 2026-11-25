@@ -10,6 +10,19 @@ with **verl + RL-Kernel**.
 | DeepSeek-V4, four layers | AMD ROCm, 8 GPUs | [Single node](models/deepseek-v4/rocm/configs/single-node-8gpu.json) |
 | DeepSeek-V4, four layers | AMD ROCm, 32 GPUs | [Four nodes](models/deepseek-v4/rocm/configs/four-node-32gpu.json) |
 
+## Container image
+
+Download the base image from [Docker Hub](https://hub.docker.com/r/vensenmu/rl-kernel/tags?name=pr711-grpo-stress):
+
+```bash
+docker pull vensenmu/rl-kernel:pr711-grpo-stress
+```
+
+This is the PR #711 dependency image. The `build` command below automatically
+pulls its pinned digest and adds the code required for the 8-/32-GPU recipes.
+The derived runtime is built locally; it is not a separately published image.
+You can skip the manual pull when using `build`.
+
 ## Quick start
 
 Run from the first GPU node. You need Docker, Python 3.10+ and eight idle GPUs

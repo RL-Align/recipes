@@ -7,6 +7,23 @@ nonquantized parameters are trained. This is a reduced-depth model.
 **Status:** CPU checks pass. The assembled runtime needs GPU validation.
 Four-node execution is experimental.
 
+## Download the image
+
+Base image: [vensenmu/rl-kernel:pr711-grpo-stress](https://hub.docker.com/r/vensenmu/rl-kernel/tags?name=pr711-grpo-stress).
+
+```bash
+docker pull vensenmu/rl-kernel:pr711-grpo-stress
+```
+
+The base image does not contain all 8-/32-GPU changes. After configuring your
+nodes, build the required runtime:
+
+```bash
+python3 run.py build --config site.json
+```
+
+This also pulls the base image automatically, so the manual pull is optional.
+
 ## Choose an allocation
 
 | Configuration | Actor | Rollout |
