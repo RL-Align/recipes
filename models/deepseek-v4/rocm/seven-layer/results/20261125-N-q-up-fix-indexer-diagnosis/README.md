@@ -22,8 +22,9 @@ independently reuses pinned production FP8 Q/K RoPE/C4 state/MQA/Top-k operators
 original BF16/F32 weights, scales, masks and metadata remain unchanged. Zero
 configured indexer auxiliary loss remains zero, and main attention backward is
 retained. No external source or actor TP restriction was changed. This new profile
-is explicitly versioned in indexer-runtime-under-test.lock.json; GPU replay and
-full-model acceptance are pending, never inferred from CPU branch checks.
+is explicitly versioned in indexer-runtime-under-test.lock.json; The actual GPU replay now passed with0 differences across17,858,560 FP8 query elements,
+139,520 folded weights and1,116,160 selected-key slots. Full-model acceptance
+remains pending, never inferred from this component replay or CPU branch checks.
 
 Component JSON distinguishes observed forward module execution from numerical,
 backward and EP acceptance. Both C4 and C128, actual Top-k overflow, hash and later

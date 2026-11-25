@@ -1,9 +1,11 @@
 {
-  "README.md": "6b26cd068db0588a1d5883c4010eb1f78b76cbeaee441ca5615da97284af698b",
+  "README.md": "627dea4e93f96940a995f8bc206fe9000ab2a30c64c43d832070722785008331",
   "long-first-boundary-difference.json": "c6362160936282c76eda31a2613bc179fc0ff9b5e3ef59546ba27f6b996755bd",
-  "status.json": "fb70fee9284d31c039fde51fa593d9261b5889474fecabf839439f3f566073b4",
+  "status.json": "94ccb80e52eb55754d449096ff70f4141d95e19e74d324619f7b3bd8448bd200",
+  "indexer-replay.log.gz": "fffb8294d4618f82ce4adb53335b63589a9a2c983f59fe73ba316114a458fa35",
   "indexer-runtime-under-test.lock.json": "ef22cedd39a684f2ac268a2fd3104d40c39fe8afee6e20d4de9e3123ff4e070f",
   "long-selected-key-diagnosis.json": "2d4cc365589abac9e28f003d6760617e657707371919baa4db39249f23a9a5c7",
+  "indexer-replay-and-health.json": "4e3ab89ce5bd712eae5db73dbbbaa01a37c7316428a40fa32601b1f4b0d71ca3",
   "scored-runtime.lock.json": "c2baf2bbf902e6a18c81bd37850388ab58e70075dbc0ef71a73ddef8718516ae",
   "q-up-replay-and-health.json": "d290087afc139aa9f4638a95c848593c3ad76e2a42f5fd6bb9582526ca93d59e",
   "long-trace-purpose.json": "1f2e344c4522504a2a6676cc0771851ca023bcdfcbd23f2a051eb112f84fabe6",

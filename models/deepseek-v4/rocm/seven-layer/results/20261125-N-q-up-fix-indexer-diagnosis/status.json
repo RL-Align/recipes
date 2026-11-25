@@ -20,5 +20,6 @@
     "N5": 0
   },
   "target_load": "NOT_RUN all groups",
-  "next": "actual native FP8 indexer replay; fail closed before full model rerun"
+  "next": "Complete full N1 fixed scoring and only then native three-update acceptance",
+  "indexer_gpu_replay": "PASS, component only"
 }
