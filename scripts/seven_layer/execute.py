@@ -112,6 +112,9 @@ def container_base(work, run, active, image, out, *, gpu=True):
         "-e",
         "TORCH_EXTENSIONS_DIR=/experiment/cache-N/torch_extensions",
     ]
+    trace_pattern = os.environ.get("RLK_TRACE_AUDIT_PATTERN")
+    if trace_pattern:
+        command += ["-e", "RLK_TRACE_AUDIT_PATTERN=" + trace_pattern]
     if gpu:
         command += [
             "--device=/dev/kfd",
@@ -503,7 +506,7 @@ def run(work, image, gpus, groups, runtime_lock, shared_policy, health_receipt, 
         runtime = json.loads(runtime_lock.read_text())
         if runtime["image_id"] != image:
             raise ValueError("runtime image lock differs")
-        write(run_root / "provenance.json", dict(image_id=image, sources=runtime["sources"]))
+        write(run_root / "provenance.json", dict(image_id=image, sources=runtime["sources"], trace_audit_pattern=os.environ.get("RLK_TRACE_AUDIT_PATTERN")))
         summary = {
             p["id"]: dict(status="NOT_RUN", fixed_weight="NOT_RUN", updates=0, target_load="NOT_RUN")
             for p in profiles()
