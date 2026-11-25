@@ -16,7 +16,9 @@ Every recipe must provide:
 6. **Status:** measured, CPU-checked, hardware-pending and failed are distinct.
    A short-run result does not establish a long-run or cross-node claim.
 
-Model/backend details belong under `models/`; reusable orchestration belongs in
+The repository README is a model/backend index. Keep image downloads, model-specific
+setup commands and validation records inside each recipe directory. Model/backend
+details belong under `models/`; reusable orchestration belongs in
 `scripts/` and `recipe_common.py`. Functional smoke data and real workload data
 must be clearly separated. Commit executable configuration and references,
 not weights, caches, private hostnames, raw traces, images or credentials.

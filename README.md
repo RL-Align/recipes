@@ -1,68 +1,43 @@
 # RL-Align Recipes
 
-Reproducible RL training, train–rollout consistency checks and performance runs
-with **verl + RL-Kernel**.
+[![CPU checks](https://github.com/RL-Align/recipes/actions/workflows/cpu.yml/badge.svg)](https://github.com/RL-Align/recipes/actions/workflows/cpu.yml)
 
-## Available recipes
+Model-specific guides for RL training, train–rollout consistency and performance
+with **RL-Kernel**. Find a model, choose a hardware backend, and follow its recipe.
 
-| Model | Hardware | Configuration |
-| --- | --- | --- |
-| DeepSeek-V4, four layers | AMD ROCm, 8 GPUs | [Single node](models/deepseek-v4/rocm/configs/single-node-8gpu.json) |
-| DeepSeek-V4, four layers | AMD ROCm, 32 GPUs | [Four nodes](models/deepseek-v4/rocm/configs/four-node-32gpu.json) |
+## Recipes
 
-## Container image
+### DeepSeek
 
-Download the base image from [Docker Hub](https://hub.docker.com/r/vensenmu/rl-kernel/tags?name=pr711-grpo-stress):
+| Model | Backend | Framework | Allocation | Guide |
+| --- | --- | --- | --- | --- |
+| DeepSeek-V4 · four layers | AMD ROCm | verl + RL-Kernel | Single node · 8 GPUs | [Open recipe](models/deepseek-v4/rocm/README.md) |
+| DeepSeek-V4 · four layers | AMD ROCm | verl + RL-Kernel | Four nodes · 32 GPUs | [Open recipe](models/deepseek-v4/rocm/README.md) |
 
-```bash
-docker pull vensenmu/rl-kernel:pr711-grpo-stress
-```
+Each recipe states its tested scope and validation status. An available
+configuration is not a hardware acceptance result.
 
-This is the PR #711 dependency image. The `build` command below automatically
-pulls its pinned digest and adds the code required for the 8-/32-GPU recipes.
-The derived runtime is built locally; it is not a separately published image.
-You can skip the manual pull when using `build`.
-
-## Quick start
-
-Run from the first GPU node. You need Docker, Python 3.10+ and eight idle GPUs
-per node. Four-node runs also require SSH access and a shared working directory.
-
-**1. Get the recipe and choose a configuration.**
+## Getting started
 
 ```bash
 git clone https://github.com/RL-Align/recipes.git
 cd recipes
-cp models/deepseek-v4/rocm/configs/single-node-8gpu.json site.json
 ```
 
-For four nodes, copy `four-node-32gpu.json` instead.
+1. Open the guide for your model and backend.
+2. Follow its image, model and data preparation steps, then configure your nodes.
+3. Run the provided commands and check the acceptance result and performance report.
 
-**2. Edit `site.json`.** Set node IPs, SSH targets, working/model/data paths and
-the network interface. Use `gfx942` for MI300X or `gfx950` for MI350X.
+Image downloads, version pins and launch commands are documented in each recipe.
+Images, weights, datasets and run artifacts remain outside Git.
 
-**3. Build the runtime and download the pinned model/data bundle.**
+## Contributing
 
-```bash
-python3 run.py build --config site.json
-python3 run.py prepare --config site.json --download
-```
+Add recipes under `models/<model>/<backend>/`. Keep each guide self-contained,
+with its own runtime references, configurations and validation record.
+See the [contribution guide](docs/recipe-contract.md) for requirements and CPU checks.
 
-**4. Run the three-step correctness check.**
+## License
 
-```bash
-python3 run.py run --config site.json
-```
-
-The command prints the new run directory, verifies the results and writes
-`report.md`. It stops only the containers created for that run.
-
-For dataset selection, 200-step runs and result files, see the
-[DeepSeek-V4 recipe](models/deepseek-v4/rocm/README.md).
-
-CPU checks pass. The assembled images and GPU runs still require hardware
-validation; the 32-GPU configuration is experimental.
-[Validation record](docs/validation.md) · [Contributing](docs/recipe-contract.md)
-
-Images, models and datasets are external references with pinned versions and
-checksums. Large artifacts are not stored in this repository.
+Repository code and documentation are [MIT licensed](LICENSE).
+Bundled framework patches retain their [upstream licenses](NOTICE.md).
