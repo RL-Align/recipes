@@ -142,6 +142,10 @@ def container_base(work, run, active, image, out, *, gpu=True):
     trace_pattern = os.environ.get("RLK_TRACE_AUDIT_PATTERN")
     if trace_pattern:
         command += ["-e", "RLK_TRACE_AUDIT_PATTERN=" + trace_pattern]
+    # Diagnostic-only rollout row dump (off unless a diagnosis driver sets both).
+    for name in ("RLK_ROUTED_ROWS_DUMP_DIR", "RLK_ROUTED_ROWS_DUMP_M"):
+        if os.environ.get(name):
+            command += ["-e", name + "=" + os.environ[name]]
     if gpu:
         command += [
             "--device=/dev/kfd",

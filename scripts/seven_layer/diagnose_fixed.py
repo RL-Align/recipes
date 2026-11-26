@@ -79,6 +79,7 @@ def main():
     ap.add_argument("--dataset", default="copy")
     ap.add_argument("--gpus", nargs="+", type=int, required=True)
     ap.add_argument("--pattern", required=True)
+    ap.add_argument("--routed-dump-m", type=int, help="diagnostic: dump rollout routed rows for M-token batches")
     args = ap.parse_args()
     work, source = args.work.resolve(), args.source_run.resolve()
     runtime = json.loads(args.runtime_lock.resolve().read_text())
@@ -131,6 +132,9 @@ def main():
         launch(
             work, root, rows, image, profile, "actor-audit", actor, version=args.version, resume=checkpoint
         )
+        if args.routed_dump_m:
+            os.environ["RLK_ROUTED_ROWS_DUMP_DIR"] = "/outputs/routed-rows"
+            os.environ["RLK_ROUTED_ROWS_DUMP_M"] = str(args.routed_dump_m)
         launch(
             work, root, rows, image, profile, "rollout-score", rollout, version=args.version, policy=policy
         )
