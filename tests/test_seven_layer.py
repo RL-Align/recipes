@@ -217,6 +217,13 @@ def test_per_gpu_locks_allow_disjoint_pools_and_block_overlap_and_legacy(tmp_pat
         execute.acquire_gpu_locks(tmp_path, [6], f)
 
 
+def test_phase_timeout_table():
+    execute = load_execute()
+    assert execute.PHASE_TIMEOUT_SECONDS["copy"] == 7200
+    assert execute.PHASE_TIMEOUT_SECONDS["dapo"] == 28800
+    assert execute.PHASE_TIMEOUT_SECONDS[None] == 7200
+
+
 def test_rendezvous_port_race_detection():
     execute = load_execute()
     race = (

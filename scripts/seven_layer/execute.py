@@ -198,6 +198,11 @@ def compare_actor_scores(first, second):
     )
 
 
+# Per-dataset phase wall-clock limit; DAPO-Math-17k phases legitimately run longer than copy-task ones.
+DEFAULT_PHASE_TIMEOUT_SECONDS = 7200
+PHASE_TIMEOUT_SECONDS = {"copy": 7200, "dapo": 8 * 3600, None: DEFAULT_PHASE_TIMEOUT_SECONDS}
+
+
 def launch(
     work,
     run,
@@ -212,6 +217,7 @@ def launch(
     batch=None,
     resume=None,
     checkpoint=None,
+    timeout_seconds=DEFAULT_PHASE_TIMEOUT_SECONDS,
 ):
     out.mkdir(parents=True, exist_ok=False)
     role = "actor" if action.startswith("actor") else "rollout"
@@ -235,7 +241,7 @@ def launch(
         port = free_loopback_port() if role == "actor" else None
         record = _launch_once(
             work, run, rows, image, profile, action, out, role, active, gpus, phase_state,
-            port, retries, version, policy, batch, resume, checkpoint,
+            port, retries, version, policy, batch, resume, checkpoint, timeout_seconds,
         )  # fmt: skip
         code = record["returncode"]
         if not code:
@@ -283,7 +289,7 @@ def is_rendezvous_port_race(log_text):
 
 def _launch_once(
     work, run, rows, image, profile, action, out, role, active, gpus, phase_state,
-    port, retries, version, policy, batch, resume, checkpoint,
+    port, retries, version, policy, batch, resume, checkpoint, timeout_seconds,
 ):  # fmt: skip
     wait_idle(run, gpus)
     command = container_base(work, run, active, image, out)
@@ -347,9 +353,11 @@ def _launch_once(
         while proc.poll() is None:
             time.sleep(1)
             elapsed = time.monotonic() - began
-            if elapsed > 7200:
+            if elapsed > timeout_seconds:
                 stop_owned_container(cid, run.name, timeout=30)
-                raise TimeoutError("own phase exceeded two-hour timeout; retained logs and checkpoints")
+                raise TimeoutError(
+                    f"own phase exceeded {timeout_seconds}s timeout; retained logs and checkpoints"
+                )
             if elapsed >= next_sample:
                 next_sample = elapsed + 5
                 try:
@@ -393,6 +401,7 @@ def _launch_once(
         machine_gpus=8,
         status="EXECUTED" if code == 0 else "FAIL",
         rendezvous_retries=retries,
+        timeout_seconds=timeout_seconds,
     )
     write(out / "execution.json", record)
     write(run / "current-phase.json", dict(phase_state, **record))
@@ -436,6 +445,7 @@ def verify(work, run, image, profile, actor, rollout, policy, out, *, suite=None
 def training(work, run, rows, image, profile, initial_policy, dataset):
     group = run / profile["id"] / dataset
     group.mkdir(parents=True)
+    timeout = PHASE_TIMEOUT_SECONDS[dataset]
     policy, checkpoint = initial_policy, None
     receipts = []
     for version in range(3):
@@ -453,6 +463,7 @@ def training(work, run, rows, image, profile, initial_policy, dataset):
             version=version,
             policy=policy,
             batch=request,
+            timeout_seconds=timeout,
         )
         update = group / f"update-{version + 1}"
         next_checkpoint = group / f"checkpoint-v{version + 1}"
@@ -468,6 +479,7 @@ def training(work, run, rows, image, profile, initial_policy, dataset):
             batch=generated / "generated-batch.json",
             resume=checkpoint,
             checkpoint=next_checkpoint,
+            timeout_seconds=timeout,
         )
         policy, checkpoint = update / f"policy-v{version + 1}.pt", next_checkpoint
         raw = json.loads((generated / "generated-batch.json").read_text())
@@ -495,6 +507,7 @@ def training(work, run, rows, image, profile, initial_policy, dataset):
             version=version + 1,
             policy=policy,
             batch=post_request,
+            timeout_seconds=timeout,
         )
         audit = group / f"v{version + 1}-actor-audit"
         launch(
@@ -508,6 +521,7 @@ def training(work, run, rows, image, profile, initial_policy, dataset):
             version=version + 1,
             resume=checkpoint,
             batch=post / "generated-batch.json",
+            timeout_seconds=timeout,
         )
         fresh = verify(
             work, run, image, profile, audit, post, policy, audit, suite=post / "generated-suite.json"
@@ -523,6 +537,7 @@ def training(work, run, rows, image, profile, initial_policy, dataset):
             fixed_actor,
             version=version + 1,
             resume=checkpoint,
+            timeout_seconds=timeout,
         )
         fixed_rollout = group / f"v{version + 1}-fixed-rollout"
         launch(
@@ -535,6 +550,7 @@ def training(work, run, rows, image, profile, initial_policy, dataset):
             fixed_rollout,
             version=version + 1,
             policy=policy,
+            timeout_seconds=timeout,
         )
         fixed = verify(work, run, image, profile, fixed_actor, fixed_rollout, policy, fixed_actor)
         receipt.update(
