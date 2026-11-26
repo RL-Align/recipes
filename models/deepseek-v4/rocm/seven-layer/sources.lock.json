@@ -11,15 +11,15 @@
   "recipe_base": "b92df81ca240cba55649aed625e173d6b2d607f2",
   "kernel": {
     "base": "71c7cb2d033806632cef1a3678939bf73dc581dd",
-    "commit": "fad44f3f0d69ebabe86c80d0ce42d883f76c9596",
-    "tree": "74698ff526ca5ed48d1b5fd21c8db9a0fecc78ea",
+    "commit": "c663ee2eb7aa1097e124db9f0bb54a89de841315",
+    "tree": "3e46318cbdb24f7866b86b249782574ac4c4bc17",
     "branch": "dsv4-rocm"
   },
   "verl": {
     "historical_recipe_base": "d154f5aa3d9a5a19210bc2df499db6ef6532db90",
     "base": "c39cdd4465233a199b87ef3c3ed6b0e65bff042f",
-    "commit": "60ae7970d0796e84de84e377c3635ac5f46772c2",
-    "tree": "0d0cf2bd81c9b42d7b05263ccc92e457ab72f96d",
+    "commit": "5d030b9053938f1a1d84430b03c67c1b09518dbe",
+    "tree": "a451fdcd5fa56d12a05cd22bf57a66d612a1ec28",
     "branch": "main",
     "change": "Explicit new fork-main pin; 99-file upstream delta from historical d154f5. CPU import check only; no compatibility or GPU acceptance claim."
   },
