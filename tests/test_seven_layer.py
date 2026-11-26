@@ -38,6 +38,7 @@ def test_zero_utilization_with_a_gpu_process_is_never_idle(monkeypatch):
 
 def test_resident_memory_and_disagreeing_process_apis_fail_closed(monkeypatch):
     watch = load("watch")
+    monkeypatch.setattr(watch, "_alive", lambda pid: True)
     monkeypatch.setattr(
         watch, "run", lambda argv: json.dumps(cards(resident=2 * 1024**3)) if "--json" in argv else ""
     )
@@ -102,6 +103,7 @@ def test_selected_pool_ignores_only_unselected_tasks_and_rejects_selected_occupa
 
 def test_zero_gpu_kfd_context_is_recorded_without_masking_any_actual_gpu_owner(monkeypatch):
     watch = load("watch")
+    monkeypatch.setattr(watch, "_alive", lambda pid: True)
     state = cards()
     state["system"] = {"PID123": "python, 0, 2097152, 0, 0"}
     mapping = ""
@@ -124,8 +126,49 @@ def test_zero_gpu_kfd_context_is_recorded_without_masking_any_actual_gpu_owner(m
 
 def test_unknown_gpu_count_is_retryable_but_never_admitted(monkeypatch):
     watch = load("watch")
+    monkeypatch.setattr(watch, "_alive", lambda pid: True)
     state = cards()
     state["system"] = {"PID123": "python, unknown, unknown, unknown, unknown"}
     monkeypatch.setattr(watch, "run", lambda argv: json.dumps(state) if "--json" in argv else "")
     with pytest.raises(RuntimeError, match="temporarily unavailable"):
+        watch.snapshot([0])
+
+
+def test_exited_unknown_pid_is_skipped_but_live_one_fails_closed(monkeypatch):
+    watch = load("watch")
+    alive = False
+    monkeypatch.setattr(watch, "_alive", lambda pid: alive)
+    state = cards()
+    state["system"] = {"PID123": "unknown, unknown, unknown, unknown, unknown"}
+    monkeypatch.setattr(watch, "run", lambda argv: json.dumps(state) if "--json" in argv else "")
+    sample = watch.snapshot([0])
+    assert sample["idle"] is True
+    assert sample["transient_exited_pids"] == [123]
+    alive = True
+    with pytest.raises(RuntimeError, match="temporarily unavailable"):
+        watch.snapshot([0])
+
+
+def test_exited_disagreeing_pid_is_dropped_but_live_one_fails_closed(monkeypatch):
+    watch = load("watch")
+    alive = False
+    monkeypatch.setattr(watch, "_alive", lambda pid: alive)
+    state = cards()
+    state["system"] = {"PID123": "python, 0, 2097152, 0, 0"}
+    mapping = "PID 123 is using 1 DRM device(s):\n4\n"
+
+    def run(argv):
+        if "--json" in argv:
+            return json.dumps(state)
+        if "--showpidgpus" in argv:
+            return mapping
+        return "123 1 root startup python workload.py"
+
+    monkeypatch.setattr(watch, "run", run)
+    sample = watch.snapshot([0])
+    assert sample["idle"] is True
+    assert sample["transient_exited_pids"] == [123]
+    assert sample["processes"] == []
+    alive = True
+    with pytest.raises(RuntimeError, match="disagree"):
         watch.snapshot([0])

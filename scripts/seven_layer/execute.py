@@ -64,6 +64,13 @@ def observe(root, gpus, *, own_container=None):
     raise RuntimeError("resource observation did not stabilize after five bounded attempts: " + errors[-1])
 
 
+UNSTABLE_OBSERVATION_LIMIT_SECONDS = 120
+
+
+def instability_exceeded(first_unstable, now):
+    return now - first_unstable > UNSTABLE_OBSERVATION_LIMIT_SECONDS
+
+
 def stop_owned_container(cid, owner, timeout=15):
     """Stop only a live container with our exact label; --rm may have won the race."""
     inspected = subprocess.run(
@@ -257,6 +264,7 @@ def launch(
     write(run / "current-phase.json", phase_state)
     began = time.monotonic()
     next_sample = 0.0
+    first_unstable = None
     with (out / "driver.log").open("w") as log:
         proc = subprocess.Popen(["docker", "start", "-a", cid], stdout=log, stderr=subprocess.STDOUT)
         while proc.poll() is None:
@@ -269,12 +277,31 @@ def launch(
                 next_sample = elapsed + 5
                 try:
                     sample, _ = observe(run, gpus, own_container=cid)
+                    first_unstable = None
                     with (run / "gpu-samples.jsonl").open("a") as f:
                         f.write(json.dumps(sample) + "\n")
                 except Exception as error:
+                    now = time.monotonic()
+                    unstable = isinstance(
+                        error, (RuntimeError, OSError, subprocess.CalledProcessError)
+                    ) and not isinstance(error, ResourceConflict)
+                    if unstable:
+                        if first_unstable is None:
+                            first_unstable = now
+                        stamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                        with (out / "observation-instability.jsonl").open("a") as f:
+                            f.write(json.dumps(dict(time=stamp, elapsed=elapsed, error=str(error))) + "\n")
+                        if not instability_exceeded(first_unstable, now):
+                            continue
+                        error = RuntimeError(
+                            f"observation unstable continuously for {now - first_unstable:.0f}s "
+                            f"(limit {UNSTABLE_OBSERVATION_LIMIT_SECONDS}s): {error}"
+                        )
                     write(out / "external-conflict.json", dict(error=str(error), container_id=cid))
                     stop_owned_container(cid, run.name)
                     proc.wait()
+                    if unstable:
+                        raise error
                     raise
         code = proc.returncode
     record = dict(
