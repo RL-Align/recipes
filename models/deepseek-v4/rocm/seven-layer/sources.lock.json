@@ -11,8 +11,8 @@
   "recipe_base": "b92df81ca240cba55649aed625e173d6b2d607f2",
   "kernel": {
     "base": "71c7cb2d033806632cef1a3678939bf73dc581dd",
-    "commit": "39d1be434bc59137a6bdb6df8f14c87a8378a183",
-    "tree": "acc4cba0ce24a03ff933519a3482d0d726fbe425",
+    "commit": "eaf49fa8ab780b22328b2ab3f920a09f8035a949",
+    "tree": "902768164fb74f35bd0e9320a4c0d0dd44a03a96",
     "branch": "dsv4-rocm"
   },
   "verl": {
