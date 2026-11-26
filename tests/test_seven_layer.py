@@ -521,3 +521,192 @@ def test_loss_sync_and_offload_are_na_only_when_evidence_is_missing(tmp_path):
     for key in ("weight_sync_seconds", "offload_restore_seconds", "policy_loss"):
         assert cells[key]["value"] == "N/A" and cells[key]["reason"]
     assert cells["rollout_seconds"]["value"] == pytest.approx(4.0)
+
+
+# ---- target-only / resume ----
+
+
+def sha_of(path):
+    import hashlib
+
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def correctness_run_dir(tmp_path, *, image="sha256:abc", status="CORRECTNESS_PASS", with_verification=True):
+    run = make_run(tmp_path, "run-c", ["N1"], states=dict(N1=dict(status=status, fixed_weight="PASS", target_load="FAIL")))
+    dump(run / "provenance.json", dict(image_id=image, sources={}, trace_audit_pattern=None))
+    if with_verification:
+        build_group(run, "N1", "copy")
+        dump(run / "N1/fixed-rollout/verification.json", verif(50))
+    return run
+
+
+def run_target_only(execute, tmp_path, correctness, **kw):
+    return execute.run(
+        tmp_path, "sha256:abc", [0, 1], ["N1"], lock_file(tmp_path), None, None,
+        target_only=True, correctness_run=correctness, **kw,
+    )  # fmt: skip
+
+
+def test_target_only_argument_validation(tmp_path):
+    execute = load_execute()
+    with pytest.raises(ValueError, match="requires --correctness-run"):
+        execute.run(tmp_path, "image", [0, 1], ["N1"], None, None, None, target_only=True)
+    with pytest.raises(ValueError, match="only valid with --target-only"):
+        execute.run(tmp_path, "image", [0, 1], ["N1"], None, None, None, correctness_run=tmp_path)
+    with pytest.raises(ValueError, match="only valid with --target-only"):
+        execute.run(tmp_path, "image", [0, 1], ["N1"], None, None, None, resume_target=tmp_path)
+
+
+def test_target_only_refuses_wrong_image_or_unpassed_correctness(tmp_path):
+    execute = load_execute()
+    with pytest.raises(ValueError, match="image_id differs"):
+        run_target_only(execute, tmp_path, correctness_run_dir(tmp_path, image="sha256:other"))
+    (tmp_path / "run-c").rename(tmp_path / "old")
+    with pytest.raises(ValueError, match="not CORRECTNESS_PASS"):
+        run_target_only(execute, tmp_path, correctness_run_dir(tmp_path, status="FAIL"))
+    (tmp_path / "run-c").rename(tmp_path / "old2")
+    with pytest.raises(ValueError, match="update-verification"):
+        run_target_only(execute, tmp_path, correctness_run_dir(tmp_path, with_verification=False))
+    with pytest.raises(ValueError, match="runtime image lock differs"):
+        execute.check_correctness_run(tmp_path / "old", ["N1"], "sha256:zzz", lock_file(tmp_path))
+
+
+def test_correctness_from_record_carries_hashes(tmp_path):
+    execute = load_execute()
+    run = correctness_run_dir(tmp_path)
+    rec = execute.check_correctness_run(run, ["N1"], "sha256:abc", lock_file(tmp_path))["N1"]
+    assert rec["run_root"] == str(run.resolve())
+    assert rec["summary_sha256"] == sha_of(run / "summary.json")
+    assert rec["update_verification_sha256"] == sha_of(run / "N1/copy/update-verification.json")
+
+
+def dapo_prior(root, complete, *, pending=False, group="N1"):
+    """Synthetic prior dapo dir with `complete` verified steps and optionally one PENDING step after."""
+    base = root / group / "dapo"
+    receipts = []
+    for k in range(1, complete + 1):
+        receipts.append(dict(update=k, post_update_fresh_and_fixed_verification="PASS"))
+        for name in (f"v{k - 1}-generate", f"v{k}-post-generate", f"v{k}-actor-audit", f"v{k}-fixed-actor", f"v{k}-fixed-rollout"):
+            dump(base / name / "execution.json", {})
+        dump(base / f"checkpoint-v{k}/manifest.json", {})
+        (base / f"update-{k}").mkdir(parents=True, exist_ok=True)
+        (base / f"update-{k}/policy-v{k}.pt").write_bytes(f"p{k}".encode())
+    if pending:
+        k = complete + 1
+        receipts.append(dict(update=k, post_update_fresh_and_fixed_verification="PENDING"))
+        dump(base / f"checkpoint-v{k}/manifest.json", {})
+        (base / f"update-{k}").mkdir(parents=True, exist_ok=True)
+        (base / f"update-{k}/policy-v{k}.pt").write_bytes(b"p")
+    if receipts:
+        dump(base / "steps.json", receipts)
+    else:
+        base.mkdir(parents=True, exist_ok=True)
+    return base
+
+
+@pytest.mark.parametrize("complete", [0, 1, 2, 3])
+def test_resume_point_counts_complete_steps_and_ignores_incomplete(tmp_path, complete):
+    execute = load_execute()
+    base = dapo_prior(tmp_path / "prior", complete, pending=complete < 3)
+    assert [s["update"] for s in execute.completed_steps(base)] == list(range(1, complete + 1))
+    count, policy, checkpoint, receipts = execute.resume_plan(base)
+    assert count == complete and len(receipts) == complete
+    if complete:
+        assert policy.name == f"policy-v{complete}.pt" and checkpoint.name == f"checkpoint-v{complete}"
+        assert receipts[0]["resumed_from"]["group"] == str(base.resolve())
+    else:
+        assert policy is None and checkpoint is None
+
+
+def test_resume_point_requires_manifest_and_policy_and_missing_dir_is_scratch(tmp_path):
+    execute = load_execute()
+    base = dapo_prior(tmp_path / "prior", 2)
+    (base / "update-2/policy-v2.pt").unlink()
+    assert execute.resume_plan(base)[0] == 1
+    (base / "checkpoint-v1/manifest.json").unlink()
+    assert execute.resume_plan(base)[0] == 0
+    assert execute.resume_plan(tmp_path / "nope")[0] == 0
+
+
+def test_resume_refuses_different_provenance(tmp_path):
+    execute = load_execute()
+    prov = dict(image_id="sha256:abc", sources={"a": 1}, trace_audit_pattern=None)
+    dump(tmp_path / "prior/provenance.json", prov)
+    assert execute.check_resume_run(tmp_path / "prior", prov) == (tmp_path / "prior").resolve()
+    with pytest.raises(ValueError, match="resume refused"):
+        execute.check_resume_run(tmp_path / "prior", dict(prov, image_id="sha256:other"))
+    with pytest.raises(ValueError, match="no provenance.json"):
+        execute.check_resume_run(tmp_path / "missing", prov)
+
+
+def test_link_prior_steps_makes_relative_symlinks_without_copying(tmp_path):
+    import os
+
+    execute = load_execute()
+    work = tmp_path / "work"
+    base = dapo_prior(work / "runs-N/old", 2)
+    new_group = work / "runs-N/new/N1/dapo"
+    new_group.mkdir(parents=True)
+    links = execute.link_prior_steps(work, new_group, base, 2)
+    assert {link["name"] for link in links} >= {"v0-generate", "update-1", "checkpoint-v2", "v2-fixed-rollout"}
+    link = new_group / "update-2"
+    assert link.is_symlink() and not os.path.isabs(os.readlink(link))
+    assert (new_group / "update-2/policy-v2.pt").read_bytes() == b"p2"
+    assert not (new_group / "v3-generate").exists()
+    outside = dapo_prior(tmp_path / "elsewhere", 1)
+    other = work / "runs-N/new2/N1/dapo"
+    other.mkdir(parents=True)
+    with pytest.raises(ValueError):
+        execute.link_prior_steps(work, other, outside, 1)
+
+
+def test_aggregate_merges_correctness_from_and_target_only_run(tmp_path):
+    import shutil
+
+    agg = load("aggregate_matrix")
+    crun = correctness_run_dir(tmp_path)
+    cf = dict(
+        run_root=str(crun),
+        summary_sha256=sha_of(crun / "summary.json"),
+        update_verification_sha256=sha_of(crun / "N1/copy/update-verification.json"),
+    )
+    state = dict(status="TARGET_ONLY_PASS", fixed_weight="PASS", target_load="PASS", correctness_from=cf)
+    trun = make_run(tmp_path, "run-t", ["N1"], states=dict(N1=state))
+    build_group(trun, "N1")  # dapo only; no copy dir in the target-only run
+    # Step 1 lives in a prior run and is only symlinked here.
+    prior = tmp_path / "run-p"
+    build_group(prior, "N1")
+    for name in ("v0-generate", "update-1", "v1-actor-audit", "v1-fixed-actor", "v1-post-generate", "v1-fixed-rollout"):
+        shutil.rmtree(trun / "N1/dapo" / name)
+        (trun / "N1/dapo" / name).symlink_to(prior / "N1/dapo" / name)
+    ref = agg.aggregate([full_run(tmp_path, "run-ref")], tmp_path / "out-ref", lock_file(tmp_path))["cells"]["N1"]
+    result = agg.aggregate([trun], tmp_path / "out", lock_file(tmp_path))
+    cells = result["cells"]["N1"]
+    for key in ("compared_tokens", "mismatch_count", "rollout_seconds", "e2e_seconds", "target_workload", "effective_steps"):
+        assert cells[key]["value"] == ref[key]["value"]
+    copy = result["copy_cells"]["N1"]
+    assert copy["three_update"] == "PASS" and copy["verified_updates"] == 3
+    assert copy["fixed_weight"] == "PASS" and copy["source_run"] == str(crun)
+    out = tmp_path / "out"
+    matrix = json.loads((out / "matrix.json").read_text(encoding="utf-8"))
+    assert matrix["groups"]["N1"]["parts"]["copy_correctness"] == str(crun)
+    assert matrix["groups"]["N1"]["parts"]["dapo_target"] == str(trun.resolve())
+    prov = json.loads((out / "provenance.json").read_text())
+    assert prov["group_parts"]["N1"]["copy_correctness"] == str(crun)
+    assert any(r.get("role", "").startswith("copy-task correctness") for r in prov["runs"])
+    steps_copy = json.loads((out / "steps-N1-copy.json").read_text())
+    assert steps_copy["run"] == str(crun)
+    index = json.loads((out / "evidence-index.json").read_text())["per_group"]["N1"]
+    assert any(f["path"].startswith("N1/dapo/update-1/") for f in index["files"])  # symlinked step indexed
+    assert index["correctness_files"]
+
+
+def test_aggregate_refuses_changed_correctness_run(tmp_path):
+    agg = load("aggregate_matrix")
+    crun = correctness_run_dir(tmp_path)
+    cf = dict(run_root=str(crun), summary_sha256="0" * 64, update_verification_sha256="0" * 64)
+    trun = make_run(tmp_path, "run-t", ["N1"], states=dict(N1=dict(status="TARGET_ONLY_PASS", correctness_from=cf)))
+    build_group(trun, "N1")
+    with pytest.raises(ValueError, match="changed"):
+        agg.aggregate([trun], tmp_path / "out", lock_file(tmp_path))

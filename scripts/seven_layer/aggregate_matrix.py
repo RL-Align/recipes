@@ -378,14 +378,43 @@ def dataset_result(base, profile, warnings):
     )
 
 
-def group_cells(name, profile, state, group_dir, warnings):
-    """All matrix cells of one group plus the copy-task summary."""
+def correctness_source(name, state):
+    """(root, state) of the run supplying copy-task correctness when the group has `correctness_from`; else None."""
+    ref = state.get("correctness_from")
+    if not ref:
+        return None
+    root = Path(ref["run_root"])
+    summary_path = root / "summary.json"
+    if not summary_path.is_file():
+        raise ValueError(f"{name}: correctness run {root} has no summary.json")
+    if sha256_of(summary_path) != ref["summary_sha256"]:
+        raise ValueError(f"{name}: correctness run summary.json changed since the target-only run")
+    other = json.loads(summary_path.read_text()).get(name, {})
+    if other.get("status") != "CORRECTNESS_PASS":
+        raise ValueError(f"{name}: correctness run status is {other.get('status')}, not CORRECTNESS_PASS")
+    verification = root / name / "copy" / "update-verification.json"
+    if not verification.is_file() or sha256_of(verification) != ref["update_verification_sha256"]:
+        raise ValueError(f"{name}: correctness run update-verification.json missing or changed")
+    return root, other
+
+
+def group_cells(name, profile, state, group_dir, warnings, correctness=None):
+    """All matrix cells of one group plus the copy-task summary.
+
+    correctness: (run_root, summary_entry) when copy-task evidence comes from another run.
+    """
     status = state.get("status", "NOT_RUN")
     blocked = status in BLOCKED_STATES
     reason = state.get("reason") or state.get("error") or f"group status {status}"
     dapo = dataset_result(group_dir / "dapo", profile, warnings)
-    copy = dataset_result(group_dir / "copy", profile, warnings)
     fixed = read(group_dir / "fixed-rollout" / "verification.json")
+    if correctness:
+        copy_dir = correctness[0] / name
+        copy = dataset_result(copy_dir / "copy", profile, warnings)
+        copy_fixed = fixed_result(read(copy_dir / "fixed-rollout" / "verification.json"), correctness[1])
+    else:
+        copy = dataset_result(group_dir / "copy", profile, warnings)
+        copy_fixed = None
     cells = {
         "actor_topology": cell(f"{profile['actor']['pp']}/{profile['actor']['tp']}/{profile['actor']['ep']}"),
         "actor_gpus": cell(profile["actor"]["gpus"]),
@@ -410,7 +439,8 @@ def group_cells(name, profile, state, group_dir, warnings):
     gated("independent_verifier", lambda: verifier_status(dapo, uv, fixed))
     copy_uv = copy["update_verification"]
     copy_cells = dict(
-        fixed_weight=cells["fixed_consistency"]["value"],
+        fixed_weight=cells["fixed_consistency"]["value"] if copy_fixed is None else (BLOCKED if blocked else cell(*copy_fixed)["value"]),
+        source_run=str(correctness[0]) if correctness else None,
         three_update=BLOCKED if blocked else update_state(copy, copy_uv),
         verified_updates=BLOCKED if blocked else (copy_uv or {}).get("completed_updates", NA),
         consistency={k: (BLOCKED if blocked else (v if v is not None else NA)) for k, (v, _) in copy["consistency"].items()},
@@ -499,7 +529,7 @@ def evidence_files(root):
         "verification.json", "scores.json", "update-verification.json", "steps.json", "result.json",
         "ep4-vs-ep1-actor.json", "execution.json",
     }  # fmt: skip
-    for dirpath, _, files in os.walk(root):
+    for dirpath, _, files in os.walk(root, followlinks=True):
         for name in sorted(files):
             if (
                 name in wanted_names
@@ -517,10 +547,11 @@ def index_files(root, scope):
     return rows
 
 
-def commands(run_root, group):
+def commands(run_root, group, only=None):
     found = []
-    for scope in (run_root / group, run_root / "common-fixed-actor"):
-        for dirpath, _, files in os.walk(scope):
+    scopes = [run_root / group / s for s in only] if only else [run_root / group, run_root / "common-fixed-actor"]
+    for scope in scopes:
+        for dirpath, _, files in os.walk(scope, followlinks=True):
             if "command.json" in files:
                 d = Path(dirpath)
                 found.append(
@@ -603,7 +634,7 @@ def aggregate(run_roots, output, runtime_lock, prefer=None):
     output.mkdir(parents=True, exist_ok=True)
     targets = {p["id"]: p for p in profiles()}
     warnings, cells, copy_cells, groups = [], {}, {}, {}
-    index, provenance_runs = {}, {}
+    index, provenance_runs, correctness_runs = {}, {}, {}
     for g in GROUPS:
         if g in chosen:
             root, state = chosen[g]
@@ -611,24 +642,32 @@ def aggregate(run_roots, output, runtime_lock, prefer=None):
         else:
             root, gdir = None, Path("/nonexistent-run-root") / g
             state = dict(status="BLOCKED", reason="group not selected by any supplied run")
-        cells[g], copy_cells[g], dapo, copy = group_cells(g, targets[g], state, gdir, warnings)
+        source = correctness_source(g, state) if root else None
+        cells[g], copy_cells[g], dapo, copy = group_cells(g, targets[g], state, gdir, warnings, source)
+        copy_root = source[0] if source else root
         groups[g] = dict(
             run=str(root) if root else None,
             summary=state,
             dapo_steps=len(dapo["records"]),
             copy_steps=len(copy["records"]),
             copy_task=copy_cells[g],
+            parts=dict(
+                fixed_weight_row=str(root) if root else None,
+                dapo_target=str(root) if root else None,
+                copy_correctness=str(copy_root) if root else None,
+                copy_fixed_weight_column=str(copy_root) if root else None,
+            ),
         )
         if root is None:
             continue
-        for dataset, result in (("dapo", dapo), ("copy", copy)):
+        for dataset, result, owner in (("dapo", dapo, root), ("copy", copy, copy_root)):
             if result["records"]:
                 write_json(
                     output / f"steps-{g}-{dataset}.json",
                     dict(
                         group=g,
                         dataset=dataset,
-                        run=str(root),
+                        run=str(owner),
                         scope="per-step raw metrics (derived) plus the original steps.json receipts",
                         steps=[
                             dict(
@@ -645,6 +684,10 @@ def aggregate(run_roots, output, runtime_lock, prefer=None):
                     ),
                 )
         index[g] = dict(run=str(root), files=index_files(root, gdir))
+        if source:
+            index[g]["correctness_run"] = str(source[0])
+            index[g]["correctness_files"] = index_files(source[0], source[0] / g / "copy")
+            correctness_runs.setdefault(source[0], []).append(g)
         provenance_runs.setdefault(root, []).append(g)
     run_index = {}
     for root in provenance_runs:
@@ -674,11 +717,11 @@ def aggregate(run_roots, output, runtime_lock, prefer=None):
             warnings=warnings,
         ),
     )
-    write_json(output / "provenance.json", provenance(lock, runtime_lock, provenance_runs, chosen, output, run_roots))
+    write_json(output / "provenance.json", provenance(lock, runtime_lock, provenance_runs, chosen, output, run_roots, correctness_runs))
     return dict(cells=cells, copy_cells=copy_cells, warnings=warnings)
 
 
-def provenance(lock, runtime_lock, runs, chosen, output, run_roots):
+def provenance(lock, runtime_lock, runs, chosen, output, run_roots, correctness_runs=None):
     runs_out, repro = [], []
     for root, names in runs.items():
         policy = read(root / "resource-policy.json", {})
@@ -701,6 +744,19 @@ def provenance(lock, runtime_lock, runs, chosen, output, run_roots):
             f"--groups {' '.join(policy.get('selected_groups', names))} --runtime-lock {runtime_lock} "
             f"--health-receipt {root / 'health-receipt.json'}"
             + (f" --resource-policy {work}/<shared-policy.json>" if (root / "resource-policy-lock.json").exists() else "")
+            + (f" --target-only --correctness-run {read(root / 'target-only.json', {}).get('correctness_run')}" if (root / "target-only.json").exists() else "")
+        )
+    for root, names in (correctness_runs or {}).items():
+        runs_out.append(
+            dict(
+                run_root=str(root),
+                role="copy-task correctness source (fixed-weight + copy three updates)",
+                groups=names,
+                summary=read(root / "summary.json"),
+                health_receipt=read(root / "health-receipt.json"),
+                provenance=read(root / "provenance.json"),
+                launch_commands={g: commands(root, g, only=["copy", "fixed-rollout"]) for g in names},
+            )
         )
     repro.append(
         "python3 scripts/seven_layer/aggregate_matrix.py --run "
@@ -714,6 +770,16 @@ def provenance(lock, runtime_lock, runs, chosen, output, run_roots):
         image_id=lock.get("image_id"),
         source_commits=dict(recipe_commit=lock.get("recipe_commit"), sources=lock.get("sources")),
         group_run=dict((g, str(r)) for g, (r, _) in chosen.items()),
+        group_parts={
+            g: dict(
+                fixed_weight_row=str(r),
+                dapo_target=str(r),
+                copy_correctness=(s.get("correctness_from") or {}).get("run_root", str(r)),
+                correctness_from=s.get("correctness_from"),
+                resume=s.get("resume"),
+            )
+            for g, (r, s) in chosen.items()
+        },
         runs=runs_out,
         reproduction_commands=repro,
     )

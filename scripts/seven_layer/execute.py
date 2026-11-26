@@ -442,13 +442,107 @@ def verify(work, run, image, profile, actor, rollout, policy, out, *, suite=None
     return json.loads((out / "verification.json").read_text())
 
 
-def training(work, run, rows, image, profile, initial_policy, dataset):
+def sha256_file(path):
+    import hashlib
+
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def completed_steps(group):
+    """Receipts of the leading run of fully complete, verified steps (1..3) of a prior trajectory.
+
+    Complete = steps.json entry PASS + checkpoint-v{k}/manifest.json + update-{k}/policy-v{k}.pt.
+    The first incomplete step ends the prefix; later steps are never counted.
+    """
+    group = Path(group)
+    path = group / "steps.json"
+    steps = json.loads(path.read_text()) if path.is_file() else []
+    done = []
+    for k in (1, 2, 3):
+        entry = next((s for s in steps if s.get("update") == k), None)
+        if not (
+            entry
+            and entry.get("post_update_fresh_and_fixed_verification") == "PASS"
+            and (group / f"checkpoint-v{k}" / "manifest.json").is_file()
+            and (group / f"update-{k}" / f"policy-v{k}.pt").is_file()
+        ):
+            break
+        done.append(entry)
+    return done
+
+
+def step_dirs(k):
+    """Directories the final verifier (and aggregator) read for completed step k."""
+    return [
+        f"v{k - 1}-generate",
+        f"update-{k}",
+        f"checkpoint-v{k}",
+        f"v{k}-post-generate",
+        f"v{k}-actor-audit",
+        f"v{k}-fixed-actor",
+        f"v{k}-fixed-rollout",
+    ]
+
+
+def link_prior_steps(work, group, prior_group, count):
+    """Relative symlinks (resolvable inside the /experiment mount) to a prior run's step dirs; no copies."""
+    work_real = Path(os.path.realpath(work))
+    group_real = os.path.realpath(group)
+    links = []
+    for k in range(1, count + 1):
+        for name in step_dirs(k):
+            src = Path(prior_group) / name
+            if not src.is_dir():
+                raise RuntimeError(f"resume source step directory missing: {src}")
+            real = Path(os.path.realpath(src))
+            real.relative_to(work_real)  # must live under the mounted work dir
+            (group / name).symlink_to(os.path.relpath(real, group_real))
+            links.append(dict(name=name, target=str(real)))
+    return links
+
+
+def resume_plan(prior_group):
+    """(count, policy, checkpoint, receipts) to continue a prior dapo trajectory; count 0 = from scratch."""
+    prior_group = Path(prior_group)
+    done = completed_steps(prior_group) if prior_group.is_dir() else []
+    count = len(done)
+    if not count:
+        return 0, None, None, []
+    real = Path(os.path.realpath(prior_group))
+    receipts = []
+    for r in done:
+        receipts.append(dict(r, resumed_from=dict(group=str(real), upstream=r.get("resumed_from"))))
+    policy = Path(os.path.realpath(real / f"update-{count}" / f"policy-v{count}.pt"))
+    checkpoint = Path(os.path.realpath(real / f"checkpoint-v{count}"))
+    return count, policy, checkpoint, receipts
+
+
+def training(
+    work, run, rows, image, profile, initial_policy, dataset,
+    *, start_version=0, initial_checkpoint=None, prior_receipts=None,
+):  # fmt: skip
+    """Three-update trajectory; with start_version > 0 the first start_version steps come from a prior run.
+
+    prior_receipts: completed steps' receipts, each carrying resumed_from.group (the prior group dir).
+    initial_policy / initial_checkpoint: the prior run's policy-v{start} and checkpoint-v{start}, used read-only.
+    """
     group = run / profile["id"] / dataset
     group.mkdir(parents=True)
     timeout = PHASE_TIMEOUT_SECONDS[dataset]
-    policy, checkpoint = initial_policy, None
+    policy, checkpoint = initial_policy, initial_checkpoint
     receipts = []
-    for version in range(3):
+    links = []
+    if start_version:
+        if not 0 < start_version <= 3 or len(prior_receipts or []) != start_version or checkpoint is None:
+            raise ValueError("resume needs start_version receipts and an initial checkpoint")
+        links = link_prior_steps(work, group, prior_receipts[0]["resumed_from"]["group"], start_version)
+        receipts = [dict(r) for r in prior_receipts]
+        write(group / "steps.json", receipts)
+    for version in range(start_version, 3):
         step_started = time.monotonic()
         request = work / f"data/requests-N/{dataset}-step{version + 1}.json"
         generated = group / f"v{version}-generate"
@@ -594,6 +688,8 @@ def training(work, run, rows, image, profile, initial_policy, dataset):
         completed_updates=3,
         dataset=dataset,
         steps=receipts,
+        resumed_updates=start_version,
+        resume_links=links,
     )
     write(group / "result.json", result)
     return result
@@ -626,12 +722,77 @@ def acquire_gpu_locks(work, gpus, stack):
     return names
 
 
-def run(work, image, gpus, groups, runtime_lock, shared_policy, health_receipt, fixed_actor=None):
+def build_provenance(image, runtime):
+    return dict(
+        image_id=image,
+        sources=runtime["sources"],
+        trace_audit_pattern=os.environ.get("RLK_TRACE_AUDIT_PATTERN"),
+    )
+
+
+def check_correctness_run(correctness_run, groups, image, runtime_lock):
+    """Per-group `correctness_from` records; refuse unless every group is CORRECTNESS_PASS on this image."""
+    root = Path(correctness_run).resolve()
+    runtime = json.loads(Path(runtime_lock).read_text())
+    if runtime["image_id"] != image:
+        raise ValueError("runtime image lock differs")
+    summary_path = root / "summary.json"
+    if not summary_path.is_file() or not (root / "provenance.json").is_file():
+        raise ValueError(f"{root}: correctness run needs summary.json and provenance.json")
+    if json.loads((root / "provenance.json").read_text()).get("image_id") != image:
+        raise ValueError("correctness run image_id differs from this run's image")
+    summary = json.loads(summary_path.read_text())
+    records = {}
+    for name in groups:
+        if summary.get(name, {}).get("status") != "CORRECTNESS_PASS":
+            raise ValueError(f"{name}: correctness run summary status is not CORRECTNESS_PASS")
+        verification = root / name / "copy" / "update-verification.json"
+        if not verification.is_file():
+            raise ValueError(f"{name}: correctness run has no copy/update-verification.json")
+        records[name] = dict(
+            run_root=str(root),
+            summary_sha256=sha256_file(summary_path),
+            update_verification=str(verification),
+            update_verification_sha256=sha256_file(verification),
+        )
+    return records
+
+
+def check_resume_run(resume_target, provenance):
+    """Phase checkpoints embed provenance and must match exactly; resume only within the same image/sources."""
+    root = Path(resume_target).resolve()
+    path = root / "provenance.json"
+    if not path.is_file():
+        raise ValueError(f"{root}: resume run has no provenance.json")
+    if json.loads(path.read_text()) != provenance:
+        raise ValueError("resume run provenance (image/sources/trace pattern) differs; resume refused")
+    return root
+
+
+def run(
+    work, image, gpus, groups, runtime_lock, shared_policy, health_receipt, fixed_actor=None,
+    *, target_only=False, correctness_run=None, resume_target=None,
+):  # fmt: skip
     targets = {p["id"]: p for p in profiles()}
     if not groups or len(set(groups)) != len(groups) or set(groups) - set(targets):
         raise ValueError("select unique groups from N1..N5")
     if not gpus or len(set(gpus)) != len(gpus) or any(g not in range(8) for g in gpus):
         raise ValueError("select unique physical GPU ordinals in 0..7")
+    if target_only and not correctness_run:
+        raise ValueError("--target-only requires --correctness-run")
+    if correctness_run and not target_only:
+        raise ValueError("--correctness-run is only valid with --target-only")
+    if resume_target and not target_only:
+        raise ValueError("--resume-target is only valid with --target-only")
+    correctness_from, resume_root = {}, None
+    if target_only:
+        if not runtime_lock:
+            raise ValueError("runtime lock required")
+        correctness_from = check_correctness_run(correctness_run, groups, image, runtime_lock)
+        if resume_target:
+            resume_root = check_resume_run(
+                resume_target, build_provenance(image, json.loads(Path(runtime_lock).read_text()))
+            )
     # N5 always runs last so it can never delay or block N1..N4.
     primary = [targets[name] for name in sorted(groups, key=lambda n: n == "N5")]
     common_profile = next((p for p in primary if p["id"] != "N5"), targets["N1"])
@@ -667,18 +828,18 @@ def run(work, image, gpus, groups, runtime_lock, shared_policy, health_receipt, 
         runtime = json.loads(runtime_lock.read_text())
         if runtime["image_id"] != image:
             raise ValueError("runtime image lock differs")
-        write(
-            run_root / "provenance.json",
-            dict(
-                image_id=image,
-                sources=runtime["sources"],
-                trace_audit_pattern=os.environ.get("RLK_TRACE_AUDIT_PATTERN"),
-            ),
-        )
+        write(run_root / "provenance.json", build_provenance(image, runtime))
         summary = {
             p["id"]: dict(status="NOT_RUN", fixed_weight="NOT_RUN", updates=0, target_load="NOT_RUN")
             for p in profiles()
         }
+        for name, record in correctness_from.items():
+            summary[name]["correctness_from"] = record
+        if target_only:
+            write(
+                run_root / "target-only.json",
+                dict(correctness_run=str(Path(correctness_run).resolve()), resume_target=str(resume_root) if resume_root else None),
+            )
         for name in set(summary) - set(groups):
             summary[name].update(status="DEFERRED", reason="not selected for this run")
         write(
@@ -745,8 +906,12 @@ def run(work, image, gpus, groups, runtime_lock, shared_policy, health_receipt, 
                 summary[name].update(fixed_weight="PASS", fixed_verification=verification)
                 write(run_root / "summary.json", summary)
                 summarize(run_root)
-                correct = training(work, run_root, rows, image, profile, policy0, "copy")
-                summary[name].update(status="CORRECTNESS_PASS", updates=correct["completed_updates"])
+                if target_only:
+                    # Copy-task correctness is taken from the referenced run (see correctness_from).
+                    summary[name].update(status="TARGET_PENDING")
+                else:
+                    correct = training(work, run_root, rows, image, profile, policy0, "copy")
+                    summary[name].update(status="CORRECTNESS_PASS", updates=correct["completed_updates"])
             except ResourceConflict:
                 raise
             except Exception as e:
@@ -767,15 +932,33 @@ def run(work, image, gpus, groups, runtime_lock, shared_policy, health_receipt, 
         # Real-data load is its own fresh three-update trajectory and cannot replace correctness.
         for profile in primary:
             name = profile["id"]
-            if summary[name]["status"] != "CORRECTNESS_PASS":
+            if summary[name]["status"] != ("TARGET_PENDING" if target_only else "CORRECTNESS_PASS"):
                 continue
             try:
-                target = training(work, run_root, rows, image, profile, policies[name], "dapo")
+                resume = {}
+                if resume_root:
+                    count, r_policy, r_checkpoint, r_receipts = resume_plan(resume_root / name / "dapo")
+                    summary[name]["resume"] = dict(from_run=str(resume_root), completed_updates=count)
+                    if count:
+                        resume = dict(
+                            start_version=count, initial_checkpoint=r_checkpoint, prior_receipts=r_receipts
+                        )
+                        write(run_root / "summary.json", summary)
+                target = training(
+                    work, run_root, rows, image, profile,
+                    r_policy if resume else policies[name], "dapo", **resume,
+                )  # fmt: skip
                 summary[name].update(target_load="PASS", target_updates=target["completed_updates"])
+                if resume:
+                    summary[name]["resume"]["links"] = target["resume_links"]
+                if target_only:
+                    summary[name]["status"] = "TARGET_ONLY_PASS"
             except ResourceConflict:
                 raise
             except Exception as e:
                 summary[name].update(target_load="FAIL", target_error=str(e))
+                if target_only:
+                    summary[name]["status"] = "FAIL"
             write(run_root / "summary.json", summary)
             summarize(run_root)
         if "N5" not in groups:
@@ -783,7 +966,7 @@ def run(work, image, gpus, groups, runtime_lock, shared_policy, health_receipt, 
                 status="DEFERRED",
                 reason="not selected for this run; N5 EP4 experimental, GPU acceptance pending; no EP1 substitution",
                 primary_correctness_gate=all(
-                    summary[p["id"]]["status"] == "CORRECTNESS_PASS" for p in profiles()[:4]
+                    summary[p["id"]]["status"] in ("CORRECTNESS_PASS", "TARGET_ONLY_PASS") for p in profiles()[:4]
                 ),
             )
         write(run_root / "summary.json", summary)
@@ -801,7 +984,14 @@ def main():
     ap.add_argument("--resource-policy", type=Path)
     ap.add_argument("--health-receipt", type=Path, required=True)
     ap.add_argument("--fixed-actor", type=Path)
+    ap.add_argument("--target-only", action="store_true", help="skip copy-task training; run fixed-weight + DAPO only")
+    ap.add_argument("--correctness-run", type=Path, help="run root whose summary shows CORRECTNESS_PASS (needs --target-only)")
+    ap.add_argument("--resume-target", type=Path, help="earlier target-only run root to continue DAPO from (needs --target-only)")
     args = ap.parse_args()
+    if args.target_only and not args.correctness_run:
+        ap.error("--target-only requires --correctness-run")
+    if (args.correctness_run or args.resume_target) and not args.target_only:
+        ap.error("--correctness-run/--resume-target require --target-only")
     run(
         args.work.resolve(),
         args.image,
@@ -811,6 +1001,9 @@ def main():
         args.resource_policy,
         args.health_receipt,
         args.fixed_actor,
+        target_only=args.target_only,
+        correctness_run=args.correctness_run,
+        resume_target=args.resume_target,
     )
 
 
