@@ -209,3 +209,22 @@ def test_ep4_vs_ep1_actor_scores_compare_raw_bytes(tmp_path):
     empty = tmp_path / "empty"
     empty.mkdir()
     assert execute.compare_actor_scores(empty, empty)["compared"] == 0
+
+
+def test_trace_compare_pairs_and_reports_first_byte_difference(tmp_path):
+    torch = pytest.importorskip("torch")
+    traces = load("compare_traces")
+    for name, value in (("a", 1.0), ("r", 1.0000001)):
+        d = tmp_path / name
+        d.mkdir()
+        events = [dict(name="rlk.residual", layer=0, file="0.pt"), dict(name="layer.0.attn.output", layer=0, file="1.pt")]
+        (d / "manifest.json").write_text(json.dumps(events + ([dict(name="only-actor", layer=0, file="0.pt")] if name == "a" else [])))
+        torch.save(torch.ones(2, 3), d / "0.pt")
+        second = torch.ones(2, 3)
+        second[1, 2] = value
+        torch.save(second, d / "1.pt")
+    result = traces.compare([tmp_path / "a"], tmp_path / "r", lambda p: torch.load(p))
+    first = result["first_difference"]
+    assert (first["name"], first["first_row"], first["first_col"]) == ("layer.0.attn.output", 1, 2)
+    assert result["unmatched_actor_names"] == [dict(layer=0, name="only-actor", count=1)]
+    assert [r["status"] for r in result["records"]] == ["equal", "differs"]
