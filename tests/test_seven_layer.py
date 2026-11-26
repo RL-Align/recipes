@@ -190,6 +190,33 @@ def test_actor_nproc_follows_profile_and_n5_is_selectable_but_needs_eight_gpus(t
         execute.run(tmp_path, "image", [0, 1, 2, 3], ["N5"], None, None, None)
 
 
+def test_per_gpu_locks_allow_disjoint_pools_and_block_overlap_and_legacy(tmp_path):
+    import contextlib
+    import fcntl
+
+    execute = load_execute()
+    with contextlib.ExitStack() as a, contextlib.ExitStack() as b:
+        assert execute.acquire_gpu_locks(tmp_path, [1, 0], a) == [
+            "execute-N-gpu0.lock",
+            "execute-N-gpu1.lock",
+        ]
+        execute.acquire_gpu_locks(tmp_path, [2, 3], b)
+        with contextlib.ExitStack() as c:
+            with pytest.raises(RuntimeError, match=r"\[1\]"):
+                execute.acquire_gpu_locks(tmp_path, [1, 4], c)
+        # GPU 4 was released by the failed attempt.
+        with contextlib.ExitStack() as d:
+            execute.acquire_gpu_locks(tmp_path, [4, 5], d)
+    # Legacy exclusive holder blocks new runs.
+    with (tmp_path / "execute-N.lock").open("a") as legacy:
+        fcntl.flock(legacy, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with contextlib.ExitStack() as e:
+            with pytest.raises(RuntimeError, match="legacy"):
+                execute.acquire_gpu_locks(tmp_path, [6], e)
+    with contextlib.ExitStack() as f:
+        execute.acquire_gpu_locks(tmp_path, [6], f)
+
+
 def test_rendezvous_port_race_detection():
     execute = load_execute()
     race = (

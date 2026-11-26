@@ -6,6 +6,7 @@ runs committed image code; one phase exits before another uses physical GPUs.
 """
 
 import argparse
+import contextlib
 import datetime
 import fcntl
 import json
@@ -582,6 +583,33 @@ def training(work, run, rows, image, profile, initial_policy, dataset):
     return result
 
 
+def acquire_gpu_locks(work, gpus, stack):
+    """Hold one exclusive flock per physical GPU plus the legacy global lock in shared mode.
+
+    Disjoint pools can run concurrently; overlapping pools and old-style exclusive
+    holders of execute-N.lock conflict. On failure everything taken is released.
+    """
+    with contextlib.ExitStack() as taken:
+        legacy = taken.enter_context((work / "execute-N.lock").open("a"))
+        try:
+            fcntl.flock(legacy, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        except OSError as exc:
+            raise RuntimeError("legacy execute-N.lock is held exclusively by another driver") from exc
+        names, busy = [], []
+        for g in sorted(gpus):
+            name = f"execute-N-gpu{g}.lock"
+            handle = taken.enter_context((work / name).open("a"))
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                busy.append(g)
+            names.append(name)
+        if busy:
+            raise RuntimeError(f"physical GPU(s) {busy} already locked by another matrix run")
+        stack.push(taken.pop_all())
+    return names
+
+
 def run(work, image, gpus, groups, runtime_lock, shared_policy, health_receipt, fixed_actor=None):
     targets = {p["id"]: p for p in profiles()}
     if not groups or len(set(groups)) != len(groups) or set(groups) - set(targets):
@@ -595,8 +623,8 @@ def run(work, image, gpus, groups, runtime_lock, shared_policy, health_receipt, 
         raise ValueError("physical pool too small; do not reduce target TP")
     runs = work / "runs-N"
     runs.mkdir(exist_ok=True)
-    with (work / "execute-N.lock").open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    with contextlib.ExitStack() as locks:
+        gpu_locks = acquire_gpu_locks(work, gpus, locks)
         run_root = runs / (
             datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid4().hex[:8]
         )
@@ -641,6 +669,7 @@ def run(work, image, gpus, groups, runtime_lock, shared_policy, health_receipt, 
             run_root / "resource-policy.json",
             dict(
                 selected_physical_gpus=gpus,
+                gpu_locks=gpu_locks,
                 selected_groups=groups,
                 machine_gpus=8,
                 local_lock_is_reservation=False,
