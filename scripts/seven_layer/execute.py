@@ -229,15 +229,67 @@ def launch(
         timestamp=datetime.datetime.now(datetime.timezone.utc).isoformat(),
     )
     write(run / "current-phase.json", phase_state)
+    retries = 0
+    while True:
+        port = free_loopback_port() if role == "actor" else None
+        record = _launch_once(
+            work, run, rows, image, profile, action, out, role, active, gpus, phase_state,
+            port, retries, version, policy, batch, resume, checkpoint,
+        )  # fmt: skip
+        code = record["returncode"]
+        if not code:
+            return record
+        log_text = (out / "driver.log").read_text(errors="replace")
+        if role == "actor" and is_rendezvous_port_race(log_text) and retries < RDZV_MAX_RETRIES - 1:
+            # Port was taken between probe and container start; keep evidence, retry on a new port.
+            retries += 1
+            kept = out.with_name(out.name + f".rdzv-attempt-{retries}")
+            out.rename(kept)
+            write(
+                kept / "rendezvous-retry.json",
+                dict(
+                    time=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    port=port,
+                    returncode=code,
+                    reason="EADDRINUSE at c10d rendezvous",
+                ),
+            )
+            out.mkdir(parents=True, exist_ok=False)
+            continue
+        if any(
+            token in log_text
+            for token in ["DistBackendError", "ncclSystemError", "ncclUnhandled", "NCCL error", "RCCL error"]
+        ):
+            raise ResourceConflict(
+                "distributed communication error; stop this experiment and retain evidence"
+            )
+        raise RuntimeError(f"{profile['id']} {action} exited {code}; see {out}/driver.log")
+
+
+def free_loopback_port():
+    with socket.socket() as rendezvous:
+        rendezvous.bind(("127.0.0.1", 0))
+        return rendezvous.getsockname()[1]
+
+
+RDZV_MAX_RETRIES = 3
+
+
+def is_rendezvous_port_race(log_text):
+    # c10d TCPStore bind failure: port stolen by another host-network process.
+    return "EADDRINUSE" in log_text and ("DistNetworkError" in log_text or "failed to listen" in log_text)
+
+
+def _launch_once(
+    work, run, rows, image, profile, action, out, role, active, gpus, phase_state,
+    port, retries, version, policy, batch, resume, checkpoint,
+):  # fmt: skip
     wait_idle(run, gpus)
     command = container_base(work, run, active, image, out)
     if role == "actor":
         # Hostname "10" is interpreted as numeric IPv4 0.0.0.10 by c10d's
         # dynamic bootstrap store. An explicit single-node loopback rendezvous
         # avoids advertising that hostname; no framework source patch is needed.
-        with socket.socket() as rendezvous:
-            rendezvous.bind(("127.0.0.1", 0))
-            port = rendezvous.getsockname()[1]
         command += [
             "-m",
             "torch.distributed.run",
@@ -339,19 +391,10 @@ def launch(
         selected_pool_gpus=len(rows),
         machine_gpus=8,
         status="EXECUTED" if code == 0 else "FAIL",
+        rendezvous_retries=retries,
     )
     write(out / "execution.json", record)
     write(run / "current-phase.json", dict(phase_state, **record))
-    if code:
-        log_text = (out / "driver.log").read_text(errors="replace")
-        if any(
-            token in log_text
-            for token in ["DistBackendError", "ncclSystemError", "ncclUnhandled", "NCCL error", "RCCL error"]
-        ):
-            raise ResourceConflict(
-                "distributed communication error; stop this experiment and retain evidence"
-            )
-        raise RuntimeError(f"{profile['id']} {action} exited {code}; see {out}/driver.log")
     return record
 
 

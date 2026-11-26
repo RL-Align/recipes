@@ -190,6 +190,18 @@ def test_actor_nproc_follows_profile_and_n5_is_selectable_but_needs_eight_gpus(t
         execute.run(tmp_path, "image", [0, 1, 2, 3], ["N5"], None, None, None)
 
 
+def test_rendezvous_port_race_detection():
+    execute = load_execute()
+    race = (
+        "torch.distributed.DistNetworkError: The server socket has failed to listen on any "
+        "local network address. port: 39793, useIpv6: 0, code: -98, name: EADDRINUSE"
+    )
+    assert execute.is_rendezvous_port_race(race)
+    assert not execute.is_rendezvous_port_race("torch.distributed.DistBackendError: RCCL error")
+    assert not execute.is_rendezvous_port_race("Traceback (most recent call last):\nValueError: x")
+    assert not execute.is_rendezvous_port_race("DistNetworkError: connection reset")
+
+
 def test_ep4_vs_ep1_actor_scores_compare_raw_bytes(tmp_path):
     execute = load_execute()
     a, b = tmp_path / "ep4", tmp_path / "ep1"
