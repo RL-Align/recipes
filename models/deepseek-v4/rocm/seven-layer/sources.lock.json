@@ -18,8 +18,8 @@
   "verl": {
     "historical_recipe_base": "d154f5aa3d9a5a19210bc2df499db6ef6532db90",
     "base": "c39cdd4465233a199b87ef3c3ed6b0e65bff042f",
-    "commit": "5d030b9053938f1a1d84430b03c67c1b09518dbe",
-    "tree": "a451fdcd5fa56d12a05cd22bf57a66d612a1ec28",
+    "commit": "6d6dc665f08eef517d8b299b429933b6b0f53243",
+    "tree": "c0a6be72c09195569875f548bc4b78cfc4d95c9d",
     "branch": "main",
     "change": "Explicit new fork-main pin; 99-file upstream delta from historical d154f5. CPU import check only; no compatibility or GPU acceptance claim."
   },
