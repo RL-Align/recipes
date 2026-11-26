@@ -80,11 +80,17 @@ def main():
     ap.add_argument("--gpus", nargs="+", type=int, required=True)
     ap.add_argument("--pattern", required=True)
     ap.add_argument("--routed-dump-m", type=int, help="diagnostic: dump rollout routed rows for M-token batches")
+    ap.add_argument("--rollout-group", help="diagnostic: rollout profile to score with (default: --group)")
     args = ap.parse_args()
     work, source = args.work.resolve(), args.source_run.resolve()
     runtime = json.loads(args.runtime_lock.resolve().read_text())
     image = runtime["image_id"]
     profile = {p["id"]: p for p in profiles()}[args.group]
+    # Optional: score the rollout with another group's profile (e.g. N2 rollout TP2) against
+    # the same actor checkpoint; N1-N4 share the actor topology, so only the rollout differs.
+    rollout_profile = {p["id"]: p for p in profiles()}[args.rollout_group or args.group]
+    if rollout_profile["actor"] != profile["actor"]:
+        raise ValueError("rollout group must share the source group's actor topology")
     if len(set(args.gpus)) != len(args.gpus) or any(g not in range(8) for g in args.gpus):
         raise ValueError("select unique physical GPU ordinals in 0..7")
     re.compile(args.pattern)
@@ -119,6 +125,7 @@ def main():
                 dataset=args.dataset,
                 pattern=args.pattern,
                 physical_gpus=args.gpus,
+                rollout_group=rollout_profile["id"],
                 note="provenance.json is copied only as the checkpoint restore key; it does not describe this image",
             ),
         )
@@ -136,11 +143,11 @@ def main():
             os.environ["RLK_ROUTED_ROWS_DUMP_DIR"] = "/outputs/routed-rows"
             os.environ["RLK_ROUTED_ROWS_DUMP_M"] = str(args.routed_dump_m)
         launch(
-            work, root, rows, image, profile, "rollout-score", rollout, version=args.version, policy=policy
+            work, root, rows, image, rollout_profile, "rollout-score", rollout, version=args.version, policy=policy
         )
         verification_error = None
         try:
-            verify(work, root, image, profile, actor, rollout, policy, actor)
+            verify(work, root, image, rollout_profile, actor, rollout, policy, actor)
         except RuntimeError as e:
             verification_error = str(e)  # FAIL is the expected reproduction
         diag = json.loads((actor / "verification.json").read_text())
