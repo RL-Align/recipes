@@ -172,3 +172,40 @@ def test_exited_disagreeing_pid_is_dropped_but_live_one_fails_closed(monkeypatch
     alive = True
     with pytest.raises(RuntimeError, match="disagree"):
         watch.snapshot([0])
+
+
+def load_execute():
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts/seven_layer"))
+    return load("execute")
+
+
+def test_actor_nproc_follows_profile_and_n5_is_selectable_but_needs_eight_gpus(tmp_path):
+    execute, matrix = load_execute(), load("matrix")
+    assert [execute.actor_nproc(p) for p in matrix.profiles()] == [2, 2, 2, 2, 8]
+    with pytest.raises(ValueError, match="select unique groups"):
+        execute.run(tmp_path, "image", list(range(8)), ["N6"], None, None, None)
+    with pytest.raises(ValueError, match="physical pool too small"):
+        execute.run(tmp_path, "image", [0, 1, 2, 3], ["N5"], None, None, None)
+
+
+def test_ep4_vs_ep1_actor_scores_compare_raw_bytes(tmp_path):
+    execute = load_execute()
+    a, b = tmp_path / "ep4", tmp_path / "ep1"
+    a.mkdir()
+    b.mkdir()
+    for d in (a, b):
+        (d / "sample-0000.f32").write_bytes(b"\x00\x00\x80\x3f")
+        (d / "sample-0001.f32").write_bytes(b"\x00\x00\x00\x40")
+        (d / "scores.json").write_text(d.name)  # topology metadata must not matter
+    same = execute.compare_actor_scores(a, b)
+    assert (same["expected"], same["compared"], same["mismatch"]) == (2, 2, 0)
+    (b / "sample-0001.f32").write_bytes(b"\x01\x00\x00\x40")
+    assert execute.compare_actor_scores(a, b)["mismatch"] == 1
+    (b / "sample-0002.f32").write_bytes(b"\x00" * 4)
+    bad = execute.compare_actor_scores(a, b)
+    assert (bad["expected"], bad["compared"], bad["mismatch"]) == (3, 2, 2)
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    assert execute.compare_actor_scores(empty, empty)["compared"] == 0

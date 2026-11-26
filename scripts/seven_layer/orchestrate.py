@@ -18,7 +18,7 @@ def main():
     ap.add_argument("--q-up-trace-run", type=Path)
     ap.add_argument("--indexer-trace-run", type=Path)
     ap.add_argument("--gpus", nargs="+", type=int, default=list(range(8)))
-    ap.add_argument("--groups", nargs="+", choices=["N1", "N2", "N3", "N4"], default=["N1", "N2", "N3", "N4"])
+    ap.add_argument("--groups", nargs="+", choices=["N1", "N2", "N3", "N4", "N5"], default=["N1", "N2", "N3", "N4"])
     args = ap.parse_args()
     work = args.work.resolve()
     with (work / "orchestrate-N.lock").open("a") as lock:

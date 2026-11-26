@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
-"""Resource-gated revised N1-N4 fixed scoring and three-update phase execution.
+"""Resource-gated revised N1-N5 fixed scoring and three-update phase execution.
 
-N5 is follow-up and cannot be launched by startup/CPU success. Every actual phase
+N5 (EP4, experimental) is opt-in, runs after N1-N4 and never blocks them. Every actual phase
 runs committed image code; one phase exits before another uses physical GPUs.
 """
 
@@ -173,6 +173,26 @@ def mapped(work, path):
     return "/experiment/" + str(Path(path).resolve().relative_to(work))
 
 
+def actor_nproc(profile):
+    return profile["actor"]["gpus"]
+
+
+def compare_actor_scores(first, second):
+    """Raw-byte comparison of two actor-score dirs' sample-*.f32; topology metadata is not compared."""
+    a = {p.name: p for p in Path(first).glob("sample-*.f32")}
+    b = {p.name: p for p in Path(second).glob("sample-*.f32")}
+    common = sorted(set(a) & set(b))
+    differing = [n for n in common if a[n].read_bytes() != b[n].read_bytes()]
+    missing = sorted(set(a) ^ set(b))
+    return dict(
+        expected=len(set(a) | set(b)),
+        compared=len(common),
+        mismatch=len(differing) + len(missing),
+        differing=differing,
+        missing=missing,
+    )
+
+
 def launch(
     work,
     run,
@@ -222,7 +242,7 @@ def launch(
             "--node_rank=0",
             "--master_addr=127.0.0.1",
             "--master_port=" + str(port),
-            "--nproc_per_node=2",
+            "--nproc_per_node=" + str(actor_nproc(profile)),
         ]
     command += [
         "-m",
@@ -477,7 +497,7 @@ def training(work, run, rows, image, profile, initial_policy, dataset):
             end_to_end_step_seconds=time.monotonic() - step_started,
         )
         # Rank receipts represent one logical batch; PP ranks never multiply token counts.
-        for rank in range(2):
+        for rank in range(actor_nproc(profile)):
             evidence = json.loads((update / f"actor-rank-{rank}-v{version + 1}.json").read_text())
             if (
                 not evidence["gradients_finite"]
@@ -516,12 +536,14 @@ def training(work, run, rows, image, profile, initial_policy, dataset):
 
 
 def run(work, image, gpus, groups, runtime_lock, shared_policy, health_receipt, fixed_actor=None):
-    targets = {p["id"]: p for p in profiles()[:4]}
+    targets = {p["id"]: p for p in profiles()}
     if not groups or len(set(groups)) != len(groups) or set(groups) - set(targets):
-        raise ValueError("select unique implemented primary groups N1..N4")
+        raise ValueError("select unique groups from N1..N5")
     if not gpus or len(set(gpus)) != len(gpus) or any(g not in range(8) for g in gpus):
         raise ValueError("select unique physical GPU ordinals in 0..7")
-    primary = [targets[name] for name in groups]
+    # N5 always runs last so it can never delay or block N1..N4.
+    primary = [targets[name] for name in sorted(groups, key=lambda n: n == "N5")]
+    common_profile = next((p for p in primary if p["id"] != "N5"), targets["N1"])
     if any(p["peak_physical_gpus"] > len(gpus) for p in primary):
         raise ValueError("physical pool too small; do not reduce target TP")
     runs = work / "runs-N"
@@ -566,8 +588,8 @@ def run(work, image, gpus, groups, runtime_lock, shared_policy, health_receipt, 
             p["id"]: dict(status="NOT_RUN", fixed_weight="NOT_RUN", updates=0, target_load="NOT_RUN")
             for p in profiles()
         }
-        for name in set(summary) - set(groups) - {"N5"}:
-            summary[name].update(status="DEFERRED", reason="not selected for this device pool")
+        for name in set(summary) - set(groups):
+            summary[name].update(status="DEFERRED", reason="not selected for this run")
         write(
             run_root / "resource-policy.json",
             dict(
@@ -598,8 +620,9 @@ def run(work, image, gpus, groups, runtime_lock, shared_policy, health_receipt, 
                 ),
             )
         else:
-            launch(work, run_root, rows, image, primary[0], "actor-score", common)
+            launch(work, run_root, rows, image, common_profile, "actor-score", common)
         initial_policy = common / "policy-v0.pt"
+        policies = {}
         for profile in primary:
             name = profile["id"]
             base = run_root / name
@@ -607,15 +630,30 @@ def run(work, image, gpus, groups, runtime_lock, shared_policy, health_receipt, 
             summary[name].update(status="RUNNING", fixed_weight="RUNNING")
             write(run_root / "summary.json", summary)
             try:
+                policy0, reference = initial_policy, common
+                if name == "N5":
+                    # EP4/DP4 actor topology differs from the common EP1 actor: score it on its own,
+                    # require bitwise equality with the EP1 actor, then pin rollout to the EP4 actor.
+                    reference = base / "fixed-actor"
+                    launch(work, run_root, rows, image, profile, "actor-score", reference)
+                    cross = compare_actor_scores(reference, common)
+                    write(base / "ep4-vs-ep1-actor.json", cross)
+                    if not cross["compared"] or cross["mismatch"]:
+                        raise RuntimeError(
+                            f"N5 EP4 actor scores differ from EP1 actor: {cross['mismatch']} of {cross['expected']}"
+                        )
+                    manifests = [json.loads((d / "policy-v0-manifest.json").read_text()) for d in (reference, common)]
+                    if not manifests[0] or manifests[0] != manifests[1]:
+                        raise RuntimeError("N5 EP4 actor initial policy export differs from the EP1 export")
+                    policy0 = reference / "policy-v0.pt"
+                policies[name] = policy0
                 rollout = base / "fixed-rollout"
-                launch(work, run_root, rows, image, profile, "rollout-score", rollout, policy=initial_policy)
-                verification = verify(
-                    work, run_root, image, profile, common, rollout, initial_policy, rollout
-                )
+                launch(work, run_root, rows, image, profile, "rollout-score", rollout, policy=policy0)
+                verification = verify(work, run_root, image, profile, reference, rollout, policy0, rollout)
                 summary[name].update(fixed_weight="PASS", fixed_verification=verification)
                 write(run_root / "summary.json", summary)
                 summarize(run_root)
-                correct = training(work, run_root, rows, image, profile, initial_policy, "copy")
+                correct = training(work, run_root, rows, image, profile, policy0, "copy")
                 summary[name].update(status="CORRECTNESS_PASS", updates=correct["completed_updates"])
             except ResourceConflict:
                 raise
@@ -640,7 +678,7 @@ def run(work, image, gpus, groups, runtime_lock, shared_policy, health_receipt, 
             if summary[name]["status"] != "CORRECTNESS_PASS":
                 continue
             try:
-                target = training(work, run_root, rows, image, profile, initial_policy, "dapo")
+                target = training(work, run_root, rows, image, profile, policies[name], "dapo")
                 summary[name].update(target_load="PASS", target_updates=target["completed_updates"])
             except ResourceConflict:
                 raise
@@ -648,13 +686,14 @@ def run(work, image, gpus, groups, runtime_lock, shared_policy, health_receipt, 
                 summary[name].update(target_load="FAIL", target_error=str(e))
             write(run_root / "summary.json", summary)
             summarize(run_root)
-        summary["N5"].update(
-            status="BLOCKED",
-            reason="Gated follow-up: EP4 actor implementation is not yet qualified; no EP1 substitution",
-            primary_correctness_gate=all(
-                summary[p["id"]]["status"] == "CORRECTNESS_PASS" for p in profiles()[:4]
-            ),
-        )
+        if "N5" not in groups:
+            summary["N5"].update(
+                status="DEFERRED",
+                reason="not selected for this run; N5 EP4 experimental, GPU acceptance pending; no EP1 substitution",
+                primary_correctness_gate=all(
+                    summary[p["id"]]["status"] == "CORRECTNESS_PASS" for p in profiles()[:4]
+                ),
+            )
         write(run_root / "summary.json", summary)
         summarize(run_root)
         print(run_root, flush=True)
@@ -665,7 +704,7 @@ def main():
     ap.add_argument("--work", type=Path, required=True)
     ap.add_argument("--image", required=True)
     ap.add_argument("--gpus", nargs="+", type=int, required=True)
-    ap.add_argument("--groups", nargs="+", choices=["N1", "N2", "N3", "N4"], required=True)
+    ap.add_argument("--groups", nargs="+", choices=["N1", "N2", "N3", "N4", "N5"], required=True)
     ap.add_argument("--runtime-lock", type=Path, required=True)
     ap.add_argument("--resource-policy", type=Path)
     ap.add_argument("--health-receipt", type=Path, required=True)

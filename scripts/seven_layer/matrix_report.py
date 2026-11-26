@@ -111,7 +111,7 @@ def summarize(root):
                     actor_logprob_seconds=sum(v["actor_logprob_seconds"] for v in parity),
                     actor_train_seconds=train_seconds,
                     actor_train_tokens_per_second=tokens / train_seconds,
-                    actor_train_tokens_per_second_per_active_gpu=tokens / train_seconds / 2,
+                    actor_train_tokens_per_second_per_active_gpu=tokens / train_seconds / p["actor"]["gpus"],
                     actor_train_tokens_per_second_per_machine_gpu=tokens / train_seconds / 8,
                     response_tokens=tokens,
                     response_length=tokens / sum(len(g["samples"]) for g in generated),
