@@ -108,7 +108,7 @@ def wait_idle(root, gpus):
             time.sleep(30)
 
 
-def container_base(work, run, active, image, out, *, gpu=True):
+def container_base(work, run, active, image, out, *, gpu=True, extra_env=()):
     ray_logs = out / "ray-runtime"
     ray_logs.mkdir(parents=True, exist_ok=True)
     command = [
@@ -140,6 +140,8 @@ def container_base(work, run, active, image, out, *, gpu=True):
         "-e",
         "TORCH_EXTENSIONS_DIR=/experiment/cache-N/torch_extensions",
     ]
+    for item in extra_env:
+        command += ["-e", item]
     trace_pattern = os.environ.get("RLK_TRACE_AUDIT_PATTERN")
     if trace_pattern:
         command += ["-e", "RLK_TRACE_AUDIT_PATTERN=" + trace_pattern]
@@ -200,6 +202,7 @@ def compare_actor_scores(first, second):
 
 # Per-dataset phase wall-clock limit; DAPO-Math-17k phases legitimately run longer than copy-task ones.
 DEFAULT_PHASE_TIMEOUT_SECONDS = 7200
+ACTOR_ALLOCATOR_ENV = ("PYTORCH_HIP_ALLOC_CONF=expandable_segments:True", "PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True")
 TARGET_DATASETS = ("dapo", "lcc", "lccsmoke")  # lccsmoke is a diagnostic feasibility set, never part of the formal matrix
 PHASE_TIMEOUT_SECONDS = {
     "copy": 7200, "dapo": 8 * 3600, "lcc": 8 * 3600, "lccsmoke": DEFAULT_PHASE_TIMEOUT_SECONDS, None: DEFAULT_PHASE_TIMEOUT_SECONDS,
@@ -295,7 +298,12 @@ def _launch_once(
     port, retries, version, policy, batch, resume, checkpoint, timeout_seconds,
 ):  # fmt: skip
     wait_idle(run, gpus)
-    command = container_base(work, run, active, image, out)
+    # Actor phases allocate 10 GiB sparse-attention backward workspaces between many smaller
+    # tensors; expandable segments keep the caching allocator from stranding them (allocator
+    # placement only, no numerical effect).
+    command = container_base(
+        work, run, active, image, out, extra_env=ACTOR_ALLOCATOR_ENV if role == "actor" else ()
+    )
     if role == "actor":
         # Hostname "10" is interpreted as numeric IPv4 0.0.0.10 by c10d's
         # dynamic bootstrap store. An explicit single-node loopback rendezvous
