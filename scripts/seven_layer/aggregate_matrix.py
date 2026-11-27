@@ -152,8 +152,9 @@ ROWS = [
         "Cross-config Token/Reward Consistency",
         "cross_config",
         "Per group against the reference group (lowest N1-N4 present): v0 response-token sha256 and reward list equality, and "
-        "for N1-N4 the per-update trajectory (response-token sha256, rewards, post-update weight digests of updated-rank-*.json "
-        "checkpoint.state_digest). N5 (Dense DP4 / EP4) is compared on v0 only; its trajectory is reported separately. "
+        "for N1-N4 every update of the trajectory (response-token sha256, rewards, post-update model and optimizer digests of "
+        "updated-rank-*.json checkpoint.model_state_digest / optimizer_state_digest; legacy state_digest-only receipts are "
+        "reported as not comparable). N5 (Dense DP4 / EP4) is compared on v0 only; its trajectory is reported separately. "
         "Details in the Cross-config consistency section and matrix.json.",
     ),
     (
@@ -932,8 +933,27 @@ def reward_per_step_cell(result):
     return " / ".join(f"{v:.6g}" for v in values) + f" (mean {mean(values):.6g})", None
 
 
+DIGEST_FIELDS = {"model_digest": "model_state_digest", "optimizer_digest": "optimizer_state_digest"}
+LEGACY_DIGEST = "not comparable (legacy digest includes run metadata)"
+
+
+def _rank_digests(receipts, key):
+    """{rank: checkpoint[key]} of the update receipts, or None unless every receipt records it."""
+    out = {}
+    for i, receipt in enumerate(receipts):
+        value = ((receipt or {}).get("checkpoint") or {}).get(key)
+        if not value:
+            return None
+        out[str((receipt or {}).get("rank", i))] = value
+    return out or None
+
+
 def trajectory_fingerprint(base):
-    """Per update k: training-batch response-token sha256 + rewards (v{k-1}-generate) and post-update weight digests."""
+    """Per update k: training-batch response-token sha256 + rewards (v{k-1}-generate) and post-update digests.
+
+    Model/optimizer digests cover only the training state. The legacy checkpoint.state_digest also covers run
+    provenance and process identity (pid, object ids, data pointers), so it is kept for display but never compared.
+    """
     out, k = [], 1
     while True:
         path = Path(base) / f"v{k - 1}-generate" / "generated-batch.json"
@@ -941,17 +961,15 @@ def trajectory_fingerprint(base):
         if not digest:
             return out
         samples = read(path)["samples"]
-        weights = {}
-        for i, receipt in enumerate(rank_files(Path(base) / f"update-{k}", "updated")):
-            digest_value = ((receipt or {}).get("checkpoint") or {}).get("state_digest")
-            if digest_value:
-                weights[str((receipt or {}).get("rank", i))] = digest_value
-        out.append(
-            dict(
-                update=k, tokens_sha256=digest[0], tokens=digest[2],
-                rewards=[s["raw_reward"] for s in samples], weights=weights or None,
-            )  # fmt: skip
-        )
+        receipts = rank_files(Path(base) / f"update-{k}", "updated")
+        row = dict(
+            update=k, tokens_sha256=digest[0], tokens=digest[2], rewards=[s["raw_reward"] for s in samples],
+            state_digest=_rank_digests(receipts, "state_digest"),
+        )  # fmt: skip
+        for field, key in DIGEST_FIELDS.items():
+            row[field] = _rank_digests(receipts, key)
+        row["legacy_digest"] = row["state_digest"] is not None and row["model_digest"] is None
+        out.append(row)
         k += 1
 
 
@@ -964,20 +982,48 @@ def _short(field, value):
 
 
 def compare_pair(a, b, fields):
-    """(first divergence or None, number of compared fields) between two groups' per-update fingerprints."""
-    compared = 0
+    """(every per-update field comparison, number of compared fields) between two groups' fingerprints.
+
+    Each entry has status MATCH, DIVERGES or NOT_COMPARABLE (a digest field where a side only has the legacy
+    state_digest); fields absent on both sides for an update are omitted.
+    """
+    rows, compared = [], 0
     for ua, ub in zip(a, b):
         for field in fields:
             va, vb = ua.get(field), ub.get(field)
             if va is None or vb is None:
+                if field in DIGEST_FIELDS and (ua.get("legacy_digest") or ub.get("legacy_digest")):
+                    rows.append(dict(update=ua["update"], field=field, status="NOT_COMPARABLE", reason=LEGACY_DIGEST))
                 continue
             compared += 1
+            entry = dict(update=ua["update"], field=field, status="MATCH" if va == vb else "DIVERGES")
             if va != vb:
-                return dict(update=ua["update"], field=field, reference=_short(field, va), other=_short(field, vb)), compared
-    return None, compared
+                entry.update(reference=_short(field, va), other=_short(field, vb))
+            rows.append(entry)
+    return rows, compared
 
 
-TRAJECTORY_FIELDS = ("tokens_sha256", "rewards", "weights")
+def divergences(rows):
+    return [r for r in rows if r["status"] == "DIVERGES"]
+
+
+def divergence_text(rows):
+    """'update 2: model_digest, optimizer_digest; update 3: tokens_sha256' over every divergent entry."""
+    per_update = {}
+    for r in divergences(rows):
+        per_update.setdefault(r["update"], []).append(r["field"])
+    return "; ".join(f"update {k}: {', '.join(v)}" for k, v in per_update.items())
+
+
+def trajectory_status(rows, compared):
+    if not compared:
+        return NA
+    if divergences(rows):
+        return "DIVERGES"
+    return "PARTIAL" if any(r["status"] == "NOT_COMPARABLE" for r in rows) else "MATCH"
+
+
+TRAJECTORY_FIELDS = ("tokens_sha256", "rewards", "model_digest", "optimizer_digest")
 
 
 def cross_config(fps):
@@ -1004,31 +1050,41 @@ def cross_config(fps):
     per_update = []
     for k in range(1, max(len(fps[g]) for g in core) + 1):
         row = dict(update=k)
+        rows = [fps[g][k - 1] for g in core if len(fps[g]) >= k]
         for field in TRAJECTORY_FIELDS:
             values = {g: json.dumps(fps[g][k - 1].get(field), sort_keys=True) for g in core if len(fps[g]) >= k and fps[g][k - 1].get(field) is not None}
-            row[field] = NA if len(values) < 2 else ("MATCH" if len(set(values.values())) == 1 else "DIVERGES")
+            if field in DIGEST_FIELDS and any(r.get("legacy_digest") for r in rows):
+                row[field] = LEGACY_DIGEST
+            else:
+                row[field] = NA if len(values) < 2 else ("MATCH" if len(set(values.values())) == 1 else "DIVERGES")
             row[field + "_groups"] = sorted(values)
         per_update.append(row)
-    first, compared_total, pair_divergence = None, 0, {}
+    compared_total, comparisons, all_rows = 0, {}, []
     for g in core:
         if g == ref:
             continue
-        div, compared = compare_pair(fps[ref], fps[g], TRAJECTORY_FIELDS)
+        rows, compared = compare_pair(fps[ref], fps[g], TRAJECTORY_FIELDS)
         compared_total += compared
-        pair_divergence[g] = div
-        if div and (first is None or (div["update"], TRAJECTORY_FIELDS.index(div["field"])) < (first["update"], TRAJECTORY_FIELDS.index(first["field"]))):
-            first = dict(div, group=g, reference_group=ref)
+        comparisons[g] = dict(status=trajectory_status(rows, compared), compared_fields=compared, rows=rows)
+        all_rows += [dict(r, group=g, reference_group=ref) for r in rows]
+    order = lambda r: (r["update"], TRAJECTORY_FIELDS.index(r["field"]))  # noqa: E731
+    found = sorted(divergences(all_rows), key=order)
     trajectory = dict(
-        groups=core, reference=ref, per_update=per_update, compared_fields=compared_total, first_divergence=first,
-        status=NA if len(core) < 2 or not compared_total else ("DIVERGES" if first else "MATCH"),
+        groups=core, reference=ref, per_update=per_update, compared_fields=compared_total,
+        comparisons=comparisons, divergences=found, first_divergence=found[0] if found else None,
+        status=NA if len(core) < 2 else trajectory_status(all_rows, compared_total),
     )  # fmt: skip
     n5 = None
     if "N5" in present:
-        div, compared = compare_pair(fps[ref], fps["N5"], ("tokens_sha256", "rewards"))
+        rows, compared = compare_pair(fps[ref], fps["N5"], ("tokens_sha256", "rewards"))
+        found = divergences(rows)
         n5 = dict(
-            reference=ref, compared_fields=compared, first_divergence=div,
-            status=NA if not compared else ("DIVERGES" if div else "MATCH"),
-            weight_digests={str(f["update"]): f["weights"] for f in fps["N5"] if f.get("weights")},
+            reference=ref, compared_fields=compared, rows=rows, divergences=found,
+            first_divergence=found[0] if found else None, status=trajectory_status(rows, compared),
+            weight_digests={
+                str(f["update"]): f.get("model_digest") or f.get("state_digest")
+                for f in fps["N5"] if f.get("model_digest") or f.get("state_digest")
+            },  # fmt: skip
             note="N5 (Dense DP4 / EP4) weight digests are per-rank EP4 states and are not compared with the EP1 digests; "
             "its train-vs-rollout bitwise parity at its own weight versions is in the matrix consistency rows.",
         )  # fmt: skip
@@ -1042,9 +1098,15 @@ def cross_config(fps):
             tail = f"; trajectory vs {ref}: {n5['status']} (tokens/rewards only; separate)" if n5 else ""
             cells[g] = f"v0 tokens {v_tok}, rewards {v_rew}{tail}"
         else:
-            div = pair_divergence.get(g)
-            traj = "N/A" if not compare_pair(fps[ref], fps[g], TRAJECTORY_FIELDS)[1] else (
-                f"DIVERGES at update {div['update']} {div['field']}" if div else "MATCH")
+            c = comparisons[g]
+            traj = {
+                NA: "N/A",
+                "MATCH": "MATCH",
+                "DIVERGES": f"DIVERGES at {divergence_text(c['rows'])}",
+                "PARTIAL": f"MATCH on tokens/rewards; weight digests {LEGACY_DIGEST}",
+            }[c["status"]]
+            if c["status"] == "DIVERGES" and any(r["status"] == "NOT_COMPARABLE" for r in c["rows"]):
+                traj += f" (weight digests {LEGACY_DIGEST})"
             cells[g] = f"v0 tokens {v_tok}, rewards {v_rew}, trajectory {traj}"
     return dict(status="OK", reference=ref, groups=present, v0=v0_info, trajectory=trajectory, n5=n5, cells=cells)
 
@@ -1093,23 +1155,32 @@ def cross_config_md(columns, cross):
     t = cross["trajectory"]
     lines += [
         f"(b) {', '.join(t['groups'])} (same Actor configuration; rollout expected bitwise identical to TP1): per update, "
-        "training-batch response tokens (v{k-1} generation), rewards and post-update weight digests "
-        "(updated-rank-*.json checkpoint.state_digest per rank).",
+        "training-batch response tokens (v{k-1} generation), rewards and post-update model / optimizer digests "
+        "(updated-rank-*.json checkpoint.model_state_digest / optimizer_state_digest per rank; training state only). "
+        "The legacy checkpoint.state_digest also covers run provenance and process identity and is never compared.",
         "",
-        "| Update | Response tokens | Rewards | Weight digests |",
-        "| --- | --- | --- | --- |",
+        "| Update | Response tokens | Rewards | Model digests | Optimizer digests |",
+        "| --- | --- | --- | --- | --- |",
     ]
     for row in t["per_update"]:
-        lines.append(f"| {row['update']} | {row['tokens_sha256']} | {row['rewards']} | {row['weights']} |")
-    if t["first_divergence"]:
+        lines.append(
+            f"| {row['update']} | {row['tokens_sha256']} | {row['rewards']} | {row['model_digest']} | {row['optimizer_digest']} |"
+        )
+    if t["divergences"]:
         d = t["first_divergence"]
         lines += [
             "",
-            f"Trajectory {t['status']}: first divergence at update {d['update']}, field {d['field']}: "
-            f"{d['reference_group']}={d['reference']} vs {d['group']}={d['other']}.",
+            f"Trajectory {t['status']}: first divergence at update {d['update']}, field {d['field']}. "
+            f"All {len(t['divergences'])} divergent comparisons:",
+        ]
+        lines += [
+            f"- update {d['update']} {d['field']}: {d['reference_group']}={d['reference']} vs {d['group']}={d['other']}"
+            for d in t["divergences"]
         ]
     else:
         lines += ["", f"Trajectory {t['status']} across {', '.join(t['groups'])} ({t['compared_fields']} field comparisons against {t['reference']})."]
+    if any(r["status"] == "NOT_COMPARABLE" for c in t["comparisons"].values() for r in c["rows"]):
+        lines += ["", f"Weight digests: {LEGACY_DIGEST}; these receipts predate model/optimizer digests."]
     n5 = cross.get("n5")
     lines += ["", "(c) N5 (reported separately):"]
     if n5:

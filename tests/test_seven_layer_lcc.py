@@ -23,8 +23,12 @@ fx, rd, wr = rep.fx, rep.rd, rep.wr
 SUITE_ROWS = [("boundary-2048", 2048), ("AB-0", 127)]
 
 
-def lcc_world(tmp_path, groups=("N1", "N2"), diverge_n2=True):
-    """work/runs-N/run-l with fixed + copy + lcc evidence; N2 differs from N1 in the update-2 weight digest only."""
+def lcc_world(tmp_path, groups=("N1", "N2"), diverge_n2=True, legacy=False):
+    """work/runs-N/run-l with fixed + copy + lcc evidence; N2 differs from N1 in the update-2 model/optimizer digests only.
+
+    The legacy state_digest always differs per group (it covers provenance and process identity); legacy=True
+    receipts carry only that digest.
+    """
     work = tmp_path / "work"
     run = fx.make_run(work / "runs-N", "run-l", list(groups))
     suite = work / "evidence/fixed-input-suite.json"
@@ -52,7 +56,10 @@ def lcc_world(tmp_path, groups=("N1", "N2"), diverge_n2=True):
                 path = base / f"update-{n}/updated-rank-{rank}.json"
                 receipt = json.loads(path.read_text())
                 digest = f"x{n}-{rank}" if (diverge_n2 and g == "N2" and n == 2) else f"w{n}-{rank}"
-                fx.dump(path, dict(receipt, rank=rank, checkpoint=dict(state_digest=digest)))
+                checkpoint = dict(state_digest=f"s{n}-{rank}-{g}")
+                if not legacy:
+                    checkpoint.update(model_state_digest=digest, optimizer_state_digest="o" + digest)
+                fx.dump(path, dict(receipt, rank=rank, checkpoint=checkpoint))
                 fx.dump(
                     base / f"update-{n}/reward-advantage-rank-{rank}.json",
                     dict(raw_rewards=[1.0, 0.0], group_ids=["0", "0"], nonzero_advantages=9),
@@ -108,16 +115,63 @@ def test_cross_config_reports_match_and_first_divergence(tmp_path):
     run, out, md = lcc_md(tmp_path)
     cross = json.loads((tmp_path / "out/matrix.json").read_text())["cross_config"]
     assert cross["v0"]["tokens_all_match"] and cross["v0"]["rewards_all_match"] and cross["v0"]["reward_distribution_all_match"]
-    assert cross["trajectory"]["status"] == "DIVERGES"
-    first = cross["trajectory"]["first_divergence"]
-    assert (first["update"], first["field"], first["group"], first["reference_group"]) == (2, "weights", "N2", "N1")
-    assert [r["tokens_sha256"] for r in cross["trajectory"]["per_update"]] == ["MATCH"] * 3
-    assert [r["weights"] for r in cross["trajectory"]["per_update"]] == ["MATCH", "DIVERGES", "MATCH"]
+    t = cross["trajectory"]
+    assert t["status"] == "DIVERGES"
+    first = t["first_divergence"]
+    assert (first["update"], first["field"], first["group"], first["reference_group"]) == (2, "model_digest", "N2", "N1")
+    assert [(d["update"], d["field"]) for d in t["divergences"]] == [(2, "model_digest"), (2, "optimizer_digest")]
+    assert [r["tokens_sha256"] for r in t["per_update"]] == ["MATCH"] * 3
+    assert [r["model_digest"] for r in t["per_update"]] == ["MATCH", "DIVERGES", "MATCH"]
+    assert [r["optimizer_digest"] for r in t["per_update"]] == ["MATCH", "DIVERGES", "MATCH"]
+    # Every update and field is compared; the per-group legacy state_digest is never a divergence.
+    rows = t["comparisons"]["N2"]["rows"]
+    assert len(rows) == 3 * 4 and t["comparisons"]["N2"]["compared_fields"] == 12
+    assert {r["status"] for r in rows} == {"MATCH", "DIVERGES"}
     cells = out["cells"]
     assert cells["N1"]["cross_config"]["value"] == "reference"
-    assert cells["N2"]["cross_config"]["value"] == "v0 tokens MATCH, rewards MATCH, trajectory DIVERGES at update 2 weights"
-    assert "### Cross-config consistency" in md and "first divergence at update 2, field weights" in md
+    assert cells["N2"]["cross_config"]["value"] == (
+        "v0 tokens MATCH, rewards MATCH, trajectory DIVERGES at update 2: model_digest, optimizer_digest"
+    )
+    assert "### Cross-config consistency" in md and "first divergence at update 2, field model_digest" in md
+    assert "All 2 divergent comparisons:" in md and "- update 2 optimizer_digest: N1=" in md
+    assert "| Update | Response tokens | Rewards | Model digests | Optimizer digests |" in md
     assert "(c) N5 (reported separately):" in md and "N/A: N5 has no generation evidence" in md
+
+
+def test_cross_config_reports_every_divergent_update_not_only_the_first(tmp_path):
+    run = lcc_world(tmp_path)
+    path = run / "N2/lcc/v2-generate/generated-batch.json"  # update 3 trains on different tokens too
+    batch = json.loads(path.read_text())
+    batch["samples"][0]["response_ids"] = [7, 7]
+    batch["samples"][0]["raw_reward"] = 0.25
+    path.write_text(json.dumps(batch))
+    out = rd.agg.aggregate([run], tmp_path / "out", fx.lock_file(tmp_path))
+    t = json.loads((tmp_path / "out/matrix.json").read_text())["cross_config"]["trajectory"]
+    assert [(d["update"], d["field"]) for d in t["divergences"]] == [
+        (2, "model_digest"), (2, "optimizer_digest"), (3, "tokens_sha256"), (3, "rewards"),
+    ]  # fmt: skip
+    assert out["cells"]["N2"]["cross_config"]["value"].endswith(
+        "DIVERGES at update 2: model_digest, optimizer_digest; update 3: tokens_sha256, rewards"
+    )
+
+
+def test_cross_config_legacy_state_digest_is_not_comparable_not_divergent(tmp_path):
+    run = lcc_world(tmp_path, diverge_n2=False, legacy=True)
+    out = rd.agg.aggregate([run], tmp_path / "out", fx.lock_file(tmp_path))
+    t = json.loads((tmp_path / "out/matrix.json").read_text())["cross_config"]["trajectory"]
+    legacy = rd.agg.LEGACY_DIGEST
+    assert legacy == "not comparable (legacy digest includes run metadata)"
+    assert t["status"] == "PARTIAL" and t["divergences"] == [] and t["first_divergence"] is None
+    assert [r["model_digest"] for r in t["per_update"]] == [legacy] * 3
+    assert {(r["field"], r["status"]) for r in t["comparisons"]["N2"]["rows"]} == {
+        ("tokens_sha256", "MATCH"), ("rewards", "MATCH"),
+        ("model_digest", "NOT_COMPARABLE"), ("optimizer_digest", "NOT_COMPARABLE"),
+    }  # fmt: skip
+    assert out["cells"]["N2"]["cross_config"]["value"] == (
+        f"v0 tokens MATCH, rewards MATCH, trajectory MATCH on tokens/rewards; weight digests {legacy}"
+    )
+    md = (tmp_path / "out/matrix.md").read_text(encoding="utf-8")
+    assert f"Weight digests: {legacy}" in md and "Trajectory PARTIAL" in md
 
 
 def test_cross_config_match_and_n5_is_separate(tmp_path):
