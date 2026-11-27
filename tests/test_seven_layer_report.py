@@ -186,3 +186,126 @@ def test_secret_scan_flags_credentials(tmp_path):
     assert pk.scan_secrets(tmp_path) == []
     (tmp_path / "bad.txt").write_text("export WANDB_API_KEY=abc")
     assert [p for p, _ in pk.scan_secrets(tmp_path)] == ["bad.txt"]
+
+
+def attempted_run(tmp_path, selected=("N1",), ids=(1, 2, 3), effective_steps=0):
+    """DAPO with no steps.json (or `effective_steps` complete steps) plus a refused update-{k}: zero advantage."""
+    run = fx.make_run(tmp_path, "run-att", list(selected))
+    for g in selected:
+        fx.build_group(run, g, "copy")
+        fx.dump(run / g / "fixed-rollout/verification.json", fx.verif(100))
+        if effective_steps:
+            fx.build_group(run, g, "dapo", steps=effective_steps)
+        k = effective_steps + 1
+        base = run / g / "dapo"
+        samples = [dict(response_ids=list(ids), raw_reward=-1.0), dict(response_ids=[7, 8], raw_reward=-1.0)]
+        fx.dump(base / f"v{k - 1}-generate/generated-batch.json", dict(samples=samples, response_tokens=5, generation_seconds=2.0))
+        fx.dump(base / f"v{k - 1}-generate/execution.json", dict(seconds=9.0))
+        rows = [dict(expected_tokens=3, compared_tokens=3, mismatch_count=0, mean_abs_diff=0.0, max_abs_diff=0.0),
+                dict(expected_tokens=2, compared_tokens=2, mismatch_count=0, mean_abs_diff=0.0, max_abs_diff=0.0)]  # fmt: skip
+        for rank in (0, 1):
+            fx.dump(base / f"update-{k}/training-parity-rank-{rank}.json",
+                    dict(expected_tokens=5, compared_tokens=5, mismatch_count=0, rows=rows, actor_logprob_seconds=1.5 + rank))  # fmt: skip
+            fx.dump(base / f"update-{k}/reward-advantage-rank-{rank}.json", dict(raw_rewards=[-1.0, -1.0], nonzero_advantages=0))
+        for rank in (1, 0):  # the lowest rank error file is the one reported
+            fx.dump(base / f"update-{k}/error-{rank}.json", dict(status="FAIL", error=f"no effective GRPO update: rank {rank}"))
+        fx.dump(base / f"update-{k}/execution.json", dict(seconds=50.0, status="FAIL"))
+        fx.dump(base / f"update-{k + 1}/execution.json", dict(seconds=1.0))  # only update-{len+1} is considered
+    return run
+
+
+def test_attempted_step_row_is_non_effective_with_reasons(tmp_path):
+    groups, _ = rd.load_groups([attempted_run(tmp_path)])
+    dapo = by_task(groups["N1"]["rows"], "dapo")
+    assert [(r["step"], r["effective"]) for r in dapo] == [(1, False)]
+    r = dapo[0]
+    assert r["attempted_error"].endswith("rank 0") and r["compared_count"] == 5 and r["mismatch_count"] == 0
+    assert r["actor_logprob_seconds"] == pytest.approx(2.5) and r["reward"] == pytest.approx(-1.0)
+    assert r["generation_seconds"] == pytest.approx(2.0) and r["weight_sync_seconds"] == pytest.approx(7.0)
+    for field in ("actor_train_seconds", "policy_loss", "total_train_seconds", "e2e_seconds", "audit_seconds", "audit_fresh_mismatch"):
+        assert r[field] is None and "refused" in r["missing"][field]
+    hist = wr.payloads(groups)[0]["history"]
+    item = [h for h in hist if "dapo/step" in h][0]
+    assert item["dapo/step"] == 1 and item["dapo/effective"] == 0
+    assert "dapo/timing/actor_train" not in item and "dapo/loss/policy" not in item and "dapo/timing/actor_logprob" in item
+
+
+def test_matrix_shows_attempted_values_marked_and_never_effective(tmp_path):
+    agg = rd.agg
+    run = attempted_run(tmp_path)
+    out = agg.aggregate([run], tmp_path / "out", fx.lock_file(tmp_path))
+    cells = out["cells"]["N1"]
+    assert cells["effective_steps"]["value"] == "0/3" and "refused" in cells["effective_steps"]["reason"]
+    assert cells["compared_tokens"]["value"] == 5 and cells["compared_tokens"]["marker"] == "†"  # one rank, parity only
+    assert cells["mismatch_count"]["value"] == 0 and cells["actor_logprob_seconds"]["value"] == pytest.approx(2.5)
+    for key in ("actor_train_seconds", "policy_loss", "audit_seconds", "e2e_seconds", "offload_restore_seconds"):
+        assert cells[key]["value"] == "N/A" and "refused" in cells[key]["reason"] and "marker" not in cells[key]
+    assert cells["target_workload"]["value"] == "FAIL"
+    verifier = cells["independent_verifier"]
+    assert verifier["value"] == "N/A" and verifier["reason"].startswith("not run: no effective DAPO update")
+    md = (tmp_path / "out/matrix.md").read_text(encoding="utf-8")
+    assert "| Effective GRPO Steps | 0/3† |" in md and "| **Mismatch Count** | 0† |" in md
+    assert "zero-advantage guard (all 2 rewards -1" in md and "no actor train, policy loss, audit or end-to-end data" in md
+    assert out["copy_cells"]["N1"]["verified_updates"] == 3 and out["copy_cells"]["N1"]["three_update"] == "PASS"
+    matrix = json.loads((tmp_path / "out/matrix.json").read_text())
+    assert matrix["footnotes"] and matrix["dapo_rollout_identity"]["status"] == "MATCH"
+    step = json.loads((tmp_path / "out/steps-N1-dapo.json").read_text())["steps"][0]
+    assert step["effective"] is False and "no effective GRPO update" in step["attempted_error"]
+
+
+def test_attempted_only_covers_update_after_steps_and_never_enters_means(tmp_path):
+    run = attempted_run(tmp_path, effective_steps=1)
+    out = rd.agg.aggregate([run], tmp_path / "out", fx.lock_file(tmp_path))["cells"]["N1"]
+    assert out["effective_steps"]["value"] == "1/3" and "marker" not in out["rollout_seconds"]
+    assert out["rollout_seconds"]["value"] == pytest.approx(2.0)  # step 1 of steps.json only
+    groups, _ = rd.load_groups([run])
+    assert [(r["step"], r["effective"]) for r in by_task(groups["N1"]["rows"], "dapo")] == [(1, True), (2, False)]
+    assert not rd.agg.dataset_result(run / "N1" / "dapo", fx_profile(), [])["used"][1:]
+
+
+def fx_profile():
+    return {p["id"]: p for p in rd.profiles()}["N1"]
+
+
+def test_rollout_token_identity_is_computed_and_detects_mismatch(tmp_path):
+    import hashlib
+    import struct
+
+    agg = rd.agg
+    run = attempted_run(tmp_path, selected=("N1", "N2"))
+    out = agg.aggregate([run], tmp_path / "out", fx.lock_file(tmp_path))["cells"]
+    want = hashlib.sha256(struct.pack("<5I", 1, 2, 3, 7, 8)).hexdigest()
+    assert out["N1"]["dapo_rollout_sha256"]["sha256"] == want and out["N1"]["dapo_rollout_sha256"]["tokens"] == 5
+    ident = agg.rollout_identity(out, ["N1", "N2"])
+    assert ident["status"] == "MATCH" and ident["sha256"] == want and ident["tokens"] == 5
+    run2 = attempted_run(tmp_path / "b", selected=("N1", "N2"), ids=(1, 2, 4))
+    out2 = agg.aggregate([run2], tmp_path / "b" / "out", fx.lock_file(tmp_path))["cells"]
+    merged = {"N1": out["N1"], "N2": out2["N2"]}
+    assert agg.rollout_identity(merged, ["N1", "N2"])["status"] == "MISMATCH"
+
+
+def test_attempted_step_in_package_matrix_and_plots(tmp_path):
+    pytest.importorskip("matplotlib")
+    import zipfile
+
+    pk = _load(SCRIPTS / "package_report.py", "seven_package_report3")
+    plot = _load(SCRIPTS / "plot_report.py", "seven_plot_report3")
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    run = attempted_run(tmp_path)
+    groups, _ = rd.load_groups([run])
+    rows = rd.all_rows(groups)
+    assert plot.series(rows, "N1", "dapo", "actor_logprob_seconds") == ([1], [2.5], [False])
+    assert plot.task_means(rows, "N1", "dapo", "actor_logprob_seconds") is None  # attempted step is no mean input
+    out = tmp_path / "plots"
+    out.mkdir()
+    plot.matrix_png(plt, groups, out)
+    for fn in (plot.summary_png, plot.trajectories_png, plot.consistency_png, plot.logp_png):
+        fn(plt, groups, rows, out)
+    assert (out / "performance-matrix.png").stat().st_size > 0
+    result = pk.build([run], tmp_path / "pkg" / "r.zip", wandb=FakeWandb())
+    text = zipfile.ZipFile(result["zip"]).read("dsv4-7l-report/matrix.md").decode()
+    assert "† DAPO update 1 measured through actor logprob" in text and "DAPO rollout token identity" in text

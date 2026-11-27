@@ -90,6 +90,12 @@ def step_row(group, task, record):
     why.setdefault("generation_seconds", why.get("rollout_seconds"))
     why.setdefault("rollout_phase_seconds", why.get("weight_sync_seconds") or why.get("rollout_seconds"))
     row["missing"] = {f: why.get(f) or "evidence missing" for f in FIELDS if row[f] is None}
+    if record.get("attempted_error"):  # refused update: step 1 exists but is not an effective GRPO step
+        row["attempted_error"] = record["attempted_error"]
+        row["missing"] = {
+            f: why_f if why_f.startswith("update ") else f"update {record['update']} refused ({record['attempted_error']}); {why_f}"
+            for f, why_f in row["missing"].items()
+        }
     return row
 
 
@@ -186,8 +192,14 @@ def all_rows(groups):
 def matrix_table(groups):
     """(columns, rows) of the Performance & Consistency matrix: label + one value per selected group."""
     columns = list(groups)
-    rows = [[label.strip("*")] + [agg.fmt(groups[g]["cells"][key]["value"]) for g in columns] for label, key, _ in agg.ROWS]
+    rows = [[label.strip("*")] + [agg.show(groups[g]["cells"][key]) for g in columns] for label, key, _ in agg.ROWS]
     return columns, rows
+
+
+def matrix_footnotes(groups):
+    """Footnote lines under the matrix: attempted-step markers plus the cross-group rollout token identity."""
+    cells = {g: v["cells"] for g, v in groups.items()}
+    return [agg.rollout_identity(cells, list(groups))["text"]] + agg.footnotes(cells, list(groups))
 
 
 # Row field -> W&B/panel name `<task>/<section>/<name>` (sections: consistency, reward, loss, timing, throughput, response).

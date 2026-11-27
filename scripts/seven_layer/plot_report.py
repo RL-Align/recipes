@@ -9,6 +9,7 @@ import argparse
 import csv
 import json
 import sys
+import textwrap
 from pathlib import Path
 from statistics import mean
 
@@ -35,12 +36,14 @@ TABLE_KEYS = [
 
 
 def series(rows, group, task, field):
-    pts = sorted((r["step"], r[field]) for r in rows if r["group"] == group and r["task"] == task and r[field] is not None)
-    return [p[0] for p in pts], [p[1] for p in pts]
+    """(steps, values, effective flags); a non-effective (attempted) step is kept and flagged."""
+    pts = sorted((r["step"], r[field], r["effective"]) for r in rows if r["group"] == group and r["task"] == task and r[field] is not None)
+    return [p[0] for p in pts], [p[1] for p in pts], [p[2] for p in pts]
 
 
 def task_means(rows, group, task, field):
-    vals = [r[field] for r in rows if r["group"] == group and r["task"] == task and r[field] is not None]
+    """Mean over effective steps only: an attempted, refused step never enters a mean."""
+    vals = [r[field] for r in rows if r["group"] == group and r["task"] == task and r["effective"] and r[field] is not None]
     return mean(vals) if vals else None
 
 
@@ -86,8 +89,9 @@ def matrix_png(plt, groups, out):
 
     labels = {key: label.strip("*") for label, key, _ in ROWS}
     cols = list(groups)
-    cells = [[labels[k]] + [fmt(groups[g]["cells"][k]["value"]) for g in cols] for k in TABLE_KEYS]
-    fig, ax = plt.subplots(figsize=(2.0 + 1.6 * len(cols), 0.38 * len(cells) + 1.0))
+    cells = [[labels[k]] + [rd.agg.show(groups[g]["cells"][k]) for g in cols] for k in TABLE_KEYS]
+    notes = rd.matrix_footnotes(groups)
+    fig, ax = plt.subplots(figsize=(2.0 + 1.6 * len(cols), 0.38 * len(cells) + 1.0 + 0.3 * len(notes)))
     ax.axis("off")
     table = ax.table(cellText=cells, colLabels=["Metric"] + cols, loc="center", cellLoc="center", colWidths=[0.4] + [0.6 / len(cols)] * len(cols))
     table.auto_set_font_size(False)
@@ -99,15 +103,18 @@ def matrix_png(plt, groups, out):
         if c == 0:
             cell.set_text_props(ha="left")
     ax.set_title("Seven-layer DeepSeek V4 - ROCm Performance & Consistency Matrix\n(DAPO target rows; N/A = no evidence)", fontsize=10)
+    wrapped = "\n".join(textwrap.fill(n, 150) for n in notes)
+    if wrapped:
+        fig.text(0.02, 0.0, wrapped, fontsize=6, va="top", ha="left")
     save(plt, fig, out, "performance-matrix.png")
 
 
 def summary_png(plt, groups, rows, out):
-    tasks = [t for t in ("copy", "dapo") if any(r["task"] == t for r in rows)]
+    tasks = [t for t in ("copy", "dapo") if any(r["task"] == t and r["effective"] for r in rows)]
     fig, axes = plt.subplots(1, max(len(tasks), 1), figsize=(6.5 * max(len(tasks), 1), 4.5), squeeze=False)
     shades = ["#4C78A8", "#F58518", "#54A24B", "#B279A2", "#9D755D", "#BAB0AC"]
     for ax, task in zip(axes[0], tasks):
-        names = [g for g in groups if any(r["group"] == g and r["task"] == task for r in rows)]
+        names = [g for g in groups if any(r["group"] == g and r["task"] == task and r["effective"] for r in rows)]
         bottoms = [0.0] * len(names)
         for (field, label), color in zip(STAGES, shades):
             vals = [task_means(rows, g, task, field) for g in names]
@@ -126,9 +133,13 @@ def lines(ax, rows, groups, field, title, tasks=("copy", "dapo")):
     drawn = False
     for g in groups:
         for t in tasks:
-            x, y = series(rows, g, t, field)
+            x, y, eff = series(rows, g, t, field)
             if x:
                 ax.plot(x, y, STYLE[t], marker="o", color=COLORS[g], label=f"{g} {t}")
+                bad = [(a, b) for a, b, e in zip(x, y, eff) if not e]
+                if bad:  # attempted step that was refused: not an effective GRPO update
+                    ax.plot(*zip(*bad), linestyle="none", marker="X", markersize=11, markerfacecolor="white",
+                            markeredgecolor=COLORS[g], markeredgewidth=1.8, label=f"{g} {t} step (non-effective)")  # fmt: skip
                 drawn = True
     ax.set_title(title, fontsize=10)
     ax.set_xlabel("GRPO update")

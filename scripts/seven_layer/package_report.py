@@ -57,6 +57,7 @@ def matrix_markdown(groups, note):
         "| Metric | " + " | ".join(columns) + " |",
         "| --- |" + " --- |" * len(columns),
     ] + ["| " + " | ".join(r) + " |" for r in rows]
+    lines += [""] + [f"{n}  " for n in rd.matrix_footnotes(groups)]
     lines += ["", "## Metric definitions", ""] + [f"- **{label.strip('*')}**: {d}" for label, _, d in rd.agg.ROWS]
     lines += [
         "",
@@ -146,7 +147,7 @@ def build(run_roots, output, *, prefer=None, entity=wr.DEFAULT_ENTITY, project=w
         ids = []
         if wandb is not None:
             ids = wr.upload(
-                wandb, wr.payloads(groups), rd.matrix_table(groups), sorted(figs.glob("*.png")), mode="offline",
+                wandb, wr.payloads(groups), rd.matrix_table(groups), sorted(figs.glob("*.png")), footnotes=rd.matrix_footnotes(groups), mode="offline",
                 entity=entity, project=project, base_url=base_url, directory=root / "wandb",
             )  # fmt: skip
         else:

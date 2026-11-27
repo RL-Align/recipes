@@ -52,10 +52,15 @@ def payloads(groups):
     for name, g in groups.items():
         cfg = g["config"]
         column = [
-            [label.strip("*"), rd.agg.fmt(g["cells"][key]["value"]), definition] for label, key, definition in rd.agg.ROWS
+            [label.strip("*"), rd.agg.show(g["cells"][key]), definition] for label, key, definition in rd.agg.ROWS
         ]
         summary = {f"matrix/{key}": g["cells"][key]["value"] for _, key, _ in rd.agg.ROWS}
         summary["status"] = cfg["status"]
+        if g["cells"]["dapo_rollout_sha256"].get("sha256"):
+            summary["dapo/rollout_token_sha256"] = g["cells"]["dapo_rollout_sha256"]["sha256"]
+        notes = [c["footnote"] for c in g["cells"].values() if c.get("footnote")]
+        if notes:
+            summary["dapo/attempted_step_note"] = notes[0]
         summary["missing"] = missing_list(g)
         runs.append(
             dict(id=run_id(name), name=run_id(name), group=name, config=cfg, history=history(g["rows"]), summary=summary, column=column)
@@ -69,7 +74,7 @@ def define_metrics(wandb, tasks):
         wandb.define_metric(f"{task}/*", step_metric=f"{task}/step")
 
 
-def upload(wandb, runs, summary_table, images, *, mode, entity, project, base_url, directory):
+def upload(wandb, runs, summary_table, images, *, footnotes=(), mode, entity, project, base_url, directory):
     """Log payloads through the given wandb module (injectable for tests). Returns the run dirs/ids."""
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
@@ -94,6 +99,8 @@ def upload(wandb, runs, summary_table, images, *, mode, entity, project, base_ur
     run = wandb.init(id="dsv4-7l-summary", name="dsv4-7l-summary", group=WANDB_GROUP, job_type="summary",
                      config=dict(groups=columns, run_ids={p["group"]: p["config"]["run_id"] for p in runs}), **common)  # fmt: skip
     run.log({"performance_consistency_matrix": wandb.Table(columns=["Metric"] + columns, data=rows)})
+    if footnotes:
+        run.summary["matrix/footnotes"] = footnotes
     for png in images:
         run.log({png.stem: wandb.Image(str(png))})
     run.finish()
@@ -127,7 +134,7 @@ def main():
     except ImportError:
         sys.exit("error: wandb is not installed (pip install wandb)")
     images = sorted(args.images.glob("*.png")) if args.images else []
-    ids = upload(wandb, runs, rd.matrix_table(groups), images, mode=args.mode, entity=args.entity,
+    ids = upload(wandb, runs, rd.matrix_table(groups), images, footnotes=rd.matrix_footnotes(groups), mode=args.mode, entity=args.entity,
                  project=args.project, base_url=args.base_url, directory=args.dir)  # fmt: skip
     print("logged:", ", ".join(ids), f"({args.mode}) under {args.dir}")
 

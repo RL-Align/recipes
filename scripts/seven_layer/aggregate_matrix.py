@@ -11,6 +11,7 @@ import fnmatch
 import hashlib
 import json
 import os
+import struct
 import sys
 from pathlib import Path
 from statistics import mean
@@ -38,7 +39,8 @@ ROWS = [
     (
         "Effective GRPO Steps",
         "effective_steps",
-        "'<n>/3' independently verified effective updates of the DAPO trajectory (update-verification.json).",
+        "'<n>/3' independently verified effective updates of the DAPO trajectory (update-verification.json). "
+        "A refused attempted update is never counted.",
     ),
     (
         "Compared Tokens",
@@ -122,6 +124,12 @@ ROWS = [
         "Arithmetic mean over effective DAPO steps.",
     ),
     (
+        "DAPO Rollout Token SHA256",
+        "dapo_rollout_sha256",
+        "First 16 hex digits (full digest in matrix.json) of sha256 over the concatenated response_ids "
+        "(uint32 little-endian, sample order) of the samples of dapo/v0-generate/generated-batch.json.",
+    ),
+    (
         "Target Workload",
         "target_workload",
         "PASS only if the DAPO-Math-17k trajectory completed 3 independently verified updates.",
@@ -180,6 +188,59 @@ def rank_files(directory, prefix):
 
 def cell(value, reason=None):
     return dict(value=NA if value is None else value, reason=reason)
+
+
+def show(c):
+    """Display text of a matrix cell: value plus the dagger marker of an attempted (non-effective) step."""
+    return fmt(c["value"]) + c.get("marker", "")
+
+
+def rollout_digest(path):
+    """(sha256 hex, samples, tokens) over concatenated response_ids (uint32 LE, sample order); None if absent."""
+    gen = read(path)
+    if not gen or not gen.get("samples"):
+        return None
+    digest, tokens = hashlib.sha256(), 0
+    for sample in gen["samples"]:
+        ids = sample["response_ids"]
+        digest.update(struct.pack(f"<{len(ids)}I", *ids))
+        tokens += len(ids)
+    return digest.hexdigest(), len(gen["samples"]), tokens
+
+
+def rollout_identity(cells, columns):
+    """Cross-group DAPO rollout token identity from the per-group digests (computed, never assumed)."""
+    columns = [g for g in columns if cells[g]["dapo_rollout_sha256"]["value"] != BLOCKED]  # groups that were run
+    found = {g: cells[g]["dapo_rollout_sha256"] for g in columns if cells[g]["dapo_rollout_sha256"].get("sha256")}
+    if not found:
+        return dict(status=NA, text="DAPO rollout token identity: N/A (no generated-batch evidence)")
+    digests = {c["sha256"] for c in found.values()}
+    counts = {(c["samples"], c["tokens"]) for c in found.values()}
+    head = "DAPO rollout token identity (sha256 over the concatenated response_ids of the samples, uint32 LE, sample order)"
+    if len(digests) == 1 and len(counts) == 1 and len(found) == len(columns):
+        samples, tokens = next(iter(counts))
+        sha = next(iter(digests))
+        return dict(
+            status="MATCH", sha256=sha, samples=samples, tokens=tokens, groups=list(found),
+            text=f"{head}: MATCH across {', '.join(found)}: {samples} samples, {tokens} tokens, sha256 {sha}",
+        )  # fmt: skip
+    status = "MISMATCH" if len(digests) > 1 or len(counts) > 1 else "PARTIAL"
+    detail = "; ".join(f"{g}={c['sha256'][:16]} ({c['tokens']} tokens)" for g, c in found.items())
+    missing = [g for g in columns if g not in found]
+    return dict(
+        status=status, per_group={g: c["sha256"] for g, c in found.items()}, missing=missing,
+        text=f"{head}: {status}: {detail}" + (f"; no evidence: {', '.join(missing)}" if missing else ""),
+    )  # fmt: skip
+
+
+def footnotes(cells, columns):
+    """Unique footnotes of cells that carry an attempted-step marker."""
+    out = []
+    for g in columns:
+        for c in cells[g].values():
+            if c.get("footnote") and c["footnote"] not in out:
+                out.append(c["footnote"])
+    return out
 
 
 def fmt(value):
@@ -340,9 +401,12 @@ def step_record(base, step, profile, warnings):
         verification_component("post_update_fresh", fresh) or dict(missing=f"v{n}-actor-audit/verification.json"),
         verification_component("post_update_fixed", fixed) or dict(missing=f"v{n}-fixed-actor/verification.json"),
     ]
+    if step.get("attempted_error"):  # update refused: every absent value is absent because of the refusal
+        why = {k: f"update {n} refused ({step['attempted_error']}); {v}" for k, v in why.items()}
     return dict(
         update=n,
         effective=step.get("post_update_fresh_and_fixed_verification") == PASS,
+        attempted_error=step.get("attempted_error"),
         response_tokens=tokens,
         metrics=metrics,
         why=why,
@@ -356,11 +420,20 @@ def dataset_result(base, profile, warnings):
     base = Path(base)
     steps = read(base / "steps.json", [])
     records = [step_record(base, s, profile, warnings) for s in steps]
-    used = [r for r in records if r["effective"]]
+    attempted = attempted_record(base, len(steps) + 1, profile, warnings)
+    if attempted:
+        records.append(attempted)
+    used = [r for r in records if r["effective"]]  # an attempted record is never effective
+    marked = set()
     perf = {}
     for key in PERF_KEYS:
         vals = [r["metrics"][key] for r in used]
-        if not used:
+        if not used and attempted:  # real values of the refused step, shown with a marker by the caller
+            value = attempted["metrics"][key]
+            perf[key] = (value, None) if value is not None else (None, attempted["why"].get(key) or "value missing")
+            if value is not None:
+                marked.add(key)
+        elif not used:
             perf[key] = (None, "no effective (independently audited) update recorded")
         elif any(v == FAIL for v in vals):
             perf[key] = (FAIL, next(r["why"].get(key) for r in used if r["metrics"][key] == FAIL))
@@ -368,14 +441,49 @@ def dataset_result(base, profile, warnings):
             perf[key] = (None, next(r["why"].get(key) for r in used if r["metrics"][key] is None) or "value missing")
         else:
             perf[key] = (mean(vals), None)
+    if used or not attempted:
+        consistency = cumulative([c for r in used for c in r["components"]])
+    else:  # training-batch parity of the attempted step only (one rank)
+        consistency = cumulative([attempted["components"][0]])
+        marked |= {k for k, (v, _) in consistency.items() if v is not None}
     return dict(
         records=records,
         used=used,
+        attempted=attempted,
+        marked=marked,
         perf=perf,
-        consistency=cumulative([c for r in used for c in r["components"]]),
+        consistency=consistency,
         update_verification=read(base / "update-verification.json"),
         steps_json=steps,
     )
+
+
+def attempted_record(base, k, profile, warnings):
+    """Non-effective record of `update-{k}` that steps.json does not cover (refused or failed); else None."""
+    directory = base / f"update-{k}"
+    if not directory.is_dir():
+        return None
+    errors = sorted((int(p.stem.rsplit("-", 1)[1]), p) for p in directory.glob("error-*.json") if p.stem.rsplit("-", 1)[1].isdigit())
+    error = (read(errors[0][1]) or {}).get("error") if errors else None
+    if not error:
+        return None  # no failure receipt: nothing is recorded as attempted
+    record = step_record(base, dict(update=k, attempted_error=error), profile, warnings)
+    record["effective"] = False
+    adv = [r for r in rank_files(directory, "reward-advantage") if r]
+    raw = adv[0].get("raw_rewards", []) if adv else []
+    rewards = sorted(set(raw))
+    reward_text = f"all {len(raw)} rewards {rewards[0]:g}" if len(rewards) == 1 else f"{len(raw)} rewards"
+    nonzero = adv[0].get("nonzero_advantages") if adv else None
+    guard = "refused by the zero-advantage guard" if nonzero == 0 else "failed"
+    record["attempted_note"] = (
+        f"\u2020 DAPO update {k} measured through actor logprob + FP32 bitwise parity (training batch, one rank); "
+        f"update {guard} ({reward_text}"
+        + (f", nonzero advantages {nonzero}" if nonzero is not None else "")
+        + f"; error: {error}); no actor train, policy loss, audit or end-to-end data. Weight Sync = "
+        f"v{k - 1} rollout phase wall time minus generation (engine start + initial weight load). "
+        "Not an effective GRPO update."
+    )
+    return record
 
 
 def correctness_source(name, state):
@@ -435,6 +543,13 @@ def group_cells(name, profile, state, group_dir, warnings, correctness=None):
         gated(key, lambda key=key: dapo["consistency"][key])
     for key in PERF_KEYS:
         gated(key, lambda key=key: dapo["perf"][key])
+    digest = rollout_digest(group_dir / "dapo" / "v0-generate" / "generated-batch.json")
+    gated("dapo_rollout_sha256", lambda: (digest[0][:16], None) if digest else (None, "dapo/v0-generate/generated-batch.json absent"))
+    if digest and not blocked:
+        cells["dapo_rollout_sha256"].update(sha256=digest[0], samples=digest[1], tokens=digest[2])
+    if dapo["attempted"] and not blocked:
+        for key in dapo["marked"] | {"effective_steps"}:
+            cells[key].update(marker="\u2020", footnote=dapo["attempted"]["attempted_note"])
     gated("target_workload", lambda: target_workload(dapo, uv, state))
     gated("independent_verifier", lambda: verifier_status(dapo, uv, fixed))
     copy_uv = copy["update_verification"]
@@ -462,6 +577,9 @@ def effective_steps(result, uv):
     if uv and uv.get("status") == PASS:
         return f"{uv['completed_updates']}/{UPDATES}", None
     ok = [r for r in result["used"] if r["fresh_status"] == PASS and r["fixed_status"] == PASS]
+    if result["attempted"]:
+        a = result["attempted"]
+        return f"{len(ok)}/{UPDATES}", f"update {a['update']} attempted but refused: {a['attempted_error']}"
     if result["records"]:
         return f"{len(ok)}/{UPDATES}", "update-verification.json not PASS; counting per-step fresh+fixed verifier PASS only"
     return None, "no DAPO update recorded"
@@ -490,6 +608,12 @@ def verifier_status(result, uv, fixed):
         return PASS, None
     if not result["records"] and not fixed and not uv:
         return None, "no verification evidence"
+    if not result["used"] and not uv and all(r.get("attempted_error") for r in result["records"]):
+        # Nothing to verify: the only DAPO update was refused before backward, so no verifier ran.
+        return None, (
+            f"not run: no effective DAPO update to verify (update refused); fixed-weight verifier "
+            f"{(fixed or {}).get('status', 'missing')}; copy-task verifier: see the Correctness table"
+        )
     return FAIL, "some verification is missing or not PASS: " + ", ".join(str(s) for s in statuses)
 
 
@@ -594,6 +718,8 @@ def notes(revision):
         "per update the training-batch parity, post-update fresh audit and post-update fixed audit "
         "(Mean Abs Diff weighted by compared tokens, Max = maximum); copy-task consistency is reported separately.",
         "Cells: measured value, N/A (evidence absent or not applicable; reasons in matrix.json), FAIL or BLOCKED.",
+        "A dagger marks a value of an attempted but refused (non-effective) DAPO update: it is never averaged into effective-step "
+        "means and never counted as an effective GRPO step.",
     ]
 
 
@@ -605,7 +731,9 @@ def render_md(columns, cells, copy_cells, revision):
         "| --- |" + " --- |" * len(columns),
     ]
     for label, key, _ in ROWS:
-        lines.append(f"| {label} | " + " | ".join(fmt(cells[g][key]["value"]) for g in columns) + " |")
+        lines.append(f"| {label} | " + " | ".join(show(cells[g][key]) for g in columns) + " |")
+    lines += ["", rollout_identity(cells, columns)["text"]]
+    lines += [""] + footnotes(cells, columns)
     lines += ["", "Notes:", ""] + [f"- {n}" for n in notes(revision)]
     lines += [
         "",
@@ -673,6 +801,7 @@ def aggregate(run_roots, output, runtime_lock, prefer=None):
                             dict(
                                 update=r["update"],
                                 effective=r["effective"],
+                                attempted_error=r.get("attempted_error"),
                                 response_tokens=r["response_tokens"],
                                 metrics={k: (v if v is not None else NA) for k, v in r["metrics"].items()},
                                 unavailable=r["why"],
@@ -700,7 +829,7 @@ def aggregate(run_roots, output, runtime_lock, prefer=None):
         writer = csv.writer(f)
         writer.writerow(["Metric"] + columns)
         for label, key, _ in ROWS:
-            writer.writerow([label.strip("*")] + [fmt(cells[g][key]["value"]) for g in columns])
+            writer.writerow([label.strip("*")] + [show(cells[g][key]) for g in columns])
     write_json(
         output / "matrix.json",
         dict(
@@ -713,6 +842,8 @@ def aggregate(run_roots, output, runtime_lock, prefer=None):
                 for label, key, definition in ROWS
             ],
             groups=groups,
+            dapo_rollout_identity=rollout_identity(cells, columns),
+            footnotes=footnotes(cells, columns),
             copy_task={g: copy_cells[g] for g in columns},
             warnings=warnings,
         ),
