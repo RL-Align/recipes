@@ -2,9 +2,10 @@
 """Build one ZIP of everything the project owner needs to publish the seven-layer N1-N5 matrix to W&B.
 
 Contents: offline W&B runs (one per group + summary), raw per-step CSV/JSON, the English Performance &
-Consistency Matrix (Markdown + PNGs at dpi>=200), configuration and version info, the independent verifier
-receipts, and SYNC.md with the exact `wandb sync` commands. The staged tree and the ZIP are scanned for
-credential patterns and the build fails if any is found. No credentials are read or required.
+Consistency Matrix (the very matrix.md/json/csv written by aggregate_matrix.py, plus PNGs at dpi>=200),
+configuration and version info, the independent verifier receipts, and SYNC.md with the exact `wandb sync`
+commands. The staged tree and the ZIP are scanned for credential patterns and the build fails if any is found.
+No credentials are read or required.
 """
 
 import argparse
@@ -18,6 +19,7 @@ import zipfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import aggregate_matrix as agg  # noqa: E402
 import plot_report as pr  # noqa: E402
 import report_data as rd  # noqa: E402
 import wandb_report as wr  # noqa: E402
@@ -49,32 +51,12 @@ def verifier_files(run_root, group, scope=None):
             yield p
 
 
-def matrix_markdown(groups, note):
-    columns, rows = rd.matrix_table(groups)
-    lines = [
-        "# Seven-layer DeepSeek V4 - ROCm Performance & Consistency Matrix",
-        "",
-        "| Metric | " + " | ".join(columns) + " |",
-        "| --- |" + " --- |" * len(columns),
-    ] + ["| " + " | ".join(r) + " |" for r in rows]
-    lines += [""] + [f"{n}  " for n in rd.matrix_footnotes(groups)]
-    lines += ["", "## Metric definitions", ""] + [f"- **{label.strip('*')}**: {d}" for label, _, d in rd.agg.ROWS]
-    lines += [
-        "",
-        "## Notes",
-        "",
-        f"- {note}",
-        "- N/A means the evidence does not contain the value (never zero-filled); per-step reasons are in raw/rounds.json.",
-        "- Fixed-weight, copy-task and DAPO-Math-17k data are separate namespaces and are never mixed in one curve or mean.",
-    ]
-    return "\n".join(lines) + "\n"
-
-
 def sync_md(ids, entity, project, base_url):
     runs = "\n".join(f"wandb sync wandb/wandb/offline-run-*-{i}" for i in ids)
     return f"""# Syncing the offline W&B runs
 
-Unzip, then from the unzipped directory (the owner's own `wandb login` supplies credentials; none are included):
+Unzip, then from the unzipped directory (the owner's own `wandb login` supplies credentials; none are included).
+This ZIP holds exactly one set of offline runs (`wandb/wandb/offline-run-*`); sync each run once, from this set only:
 
 ```bash
 pip install wandb
@@ -93,11 +75,33 @@ throughput, response; the x axis is `<task>/step` (GRPO update index).
 """
 
 
-def build(run_roots, output, *, prefer=None, entity=wr.DEFAULT_ENTITY, project=wr.DEFAULT_PROJECT, base_url=wr.DEFAULT_BASE_URL, wandb=None):
+def source_commits(groups):
+    """Source commits from the groups' provenance-derived configs: one value if all groups agree, else per group."""
+    out = {}
+    for key in ("recipes_commit", "rl_kernel_commit", "verl_commit"):
+        values = {g: v["config"].get(key) for g, v in groups.items()}
+        distinct = {json.dumps(x) for x in values.values()}
+        out[key] = next(iter(values.values())) if len(distinct) == 1 else values
+    return out
+
+
+def build(
+    run_roots, output, *, runtime_lock, prefer=None, entity=wr.DEFAULT_ENTITY, project=wr.DEFAULT_PROJECT,
+    base_url=wr.DEFAULT_BASE_URL, wandb=None, matrix_dir=None, wandb_dir=None,
+):  # fmt: skip
+    """Build the ZIP.
+
+    matrix_dir: an existing aggregate_matrix output whose matrix.md/json/csv are packaged as they are; without it
+    aggregate_matrix.aggregate() runs into the staging area (same code path, byte-identical files).
+    wandb_dir: where the offline W&B runs are written (the report directory's set); the ZIP copies that same set,
+    so exactly one set exists. Without it the runs are written into the staging area only.
+    """
     output = Path(output)
     if output.exists():
         raise FileExistsError(f"{output} exists; refusing to overwrite")
-    groups, warnings = rd.load_groups(run_roots, prefer)
+    if wandb_dir is not None and list(Path(wandb_dir).glob("wandb/offline-run-*")):
+        raise FileExistsError(f"{wandb_dir} already holds offline runs; refusing to create a second set")
+    groups, warnings = rd.load_groups(run_roots, prefer, runtime_lock)
     stage = Path(tempfile.mkdtemp(prefix="dsv4-7l-report-"))
     try:
         root = stage / "dsv4-7l-report"
@@ -106,9 +110,12 @@ def build(run_roots, output, *, prefer=None, entity=wr.DEFAULT_ENTITY, project=w
         raw.mkdir(parents=True)
         pr.write_rounds(raw / "rounds.csv", rows)
         (raw / "rounds.json").write_text(json.dumps(rows, indent=2, default=str) + "\n", encoding="utf-8")
-        pr.write_summary(raw / "summary.json", groups, rows, " ".join(sys.argv))
-        note = "Performance rows are DAPO-Math-17k target values; consistency rows are cumulative over its updates."
-        (root / "matrix.md").write_text(matrix_markdown(groups, note), encoding="utf-8")
+        pr.write_summary(raw / "summary.json", groups, rows)
+        if matrix_dir is None:
+            matrix_dir = stage / "matrix"
+            agg.aggregate(run_roots, matrix_dir, runtime_lock, prefer)
+        for name in ("matrix.md", "matrix.json", "matrix.csv"):  # the very files aggregate_matrix wrote, never re-rendered
+            shutil.copyfile(Path(matrix_dir) / name, root / name)
         import matplotlib
 
         matplotlib.use("Agg")
@@ -123,9 +130,13 @@ def build(run_roots, output, *, prefer=None, entity=wr.DEFAULT_ENTITY, project=w
         pr.logp_png(plt, groups, rows, figs)
         cfg = root / "config"
         cfg.mkdir()
+        tooling = rd.tooling_commit()
         versions = dict(
             python=platform.python_version(), platform=platform.platform(), matplotlib=matplotlib.__version__,
-            wandb=getattr(wandb, "__version__", None), warnings=warnings,
+            wandb=getattr(wandb, "__version__", None),
+            source_commits=source_commits(groups),
+            report_tooling_commit=tooling["commit"], report_tooling_commit_source=tooling["source"],
+            warnings=warnings,
         )  # fmt: skip
         (cfg / "versions.json").write_text(json.dumps(versions, indent=2) + "\n", encoding="utf-8")
         for g, v in groups.items():
@@ -146,10 +157,13 @@ def build(run_roots, output, *, prefer=None, entity=wr.DEFAULT_ENTITY, project=w
                     shutil.copy(p, dest)
         ids = []
         if wandb is not None:
+            wb = Path(wandb_dir) if wandb_dir is not None else root / "wandb"
             ids = wr.upload(
                 wandb, wr.payloads(groups), rd.matrix_table(groups), sorted(figs.glob("*.png")), footnotes=rd.matrix_footnotes(groups), mode="offline",
-                entity=entity, project=project, base_url=base_url, directory=root / "wandb",
+                entity=entity, project=project, base_url=base_url, directory=wb,
             )  # fmt: skip
+            if wandb_dir is not None:  # the same files as the report directory, copied once
+                shutil.copytree(wb, root / "wandb", symlinks=True)  # latest-run stays a link: no second copy
         else:
             warnings.append("wandb not installed: offline runs not included")
         names = ids or [wr.run_id(g) for g in groups] + ["dsv4-7l-summary"]
@@ -179,6 +193,9 @@ def main():
     ap.add_argument("--runs", nargs="+", action="extend", required=True, type=Path, help="run roots (runs-N/<id>)")
     ap.add_argument("--prefer", help="run root (or its name) that wins when a group appears in several runs")
     ap.add_argument("--output", type=Path, required=True, help="ZIP file to create (must not exist)")
+    ap.add_argument("--runtime-lock", type=Path, required=True, help="runtime lock (dataset revision, recipes commit)")
+    ap.add_argument("--matrix-dir", type=Path, help="existing aggregate_matrix.py output whose matrix.* files are packaged unchanged")
+    ap.add_argument("--wandb-dir", type=Path, help="write the offline W&B runs here (report directory) and copy the same set into the ZIP")
     ap.add_argument("--entity", default=wr.DEFAULT_ENTITY)
     ap.add_argument("--project", default=wr.DEFAULT_PROJECT)
     ap.add_argument("--base-url", default=wr.DEFAULT_BASE_URL)
@@ -188,7 +205,10 @@ def main():
     except ImportError:
         wandb = None
     try:
-        result = build(args.runs, args.output, prefer=args.prefer, entity=args.entity, project=args.project, base_url=args.base_url, wandb=wandb)
+        result = build(
+            args.runs, args.output, runtime_lock=args.runtime_lock, prefer=args.prefer, entity=args.entity, project=args.project,
+            base_url=args.base_url, wandb=wandb, matrix_dir=args.matrix_dir, wandb_dir=args.wandb_dir,
+        )  # fmt: skip
     except (ValueError, FileExistsError, RuntimeError) as error:
         sys.exit(f"error: {error}")
     print(json.dumps(result, indent=2))

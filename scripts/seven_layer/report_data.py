@@ -6,6 +6,7 @@ semantics and metric definitions). Nothing is synthesized: a value the evidence 
 and its reason is recorded in the row's `missing` mapping.
 """
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -20,7 +21,7 @@ FROM_METRICS = {
     "reward": "reward",
     "policy_loss": "policy_loss",
     "rollout_seconds": "rollout_seconds",  # generation_seconds of generated-batch.json
-    "weight_sync_seconds": "weight_sync_seconds",
+    "rollout_setup_sync_seconds": "rollout_setup_sync_seconds",
     "actor_train_seconds": "actor_train_seconds",
     "actor_logprob_seconds": "actor_logprob_seconds",
     "offload_restore_seconds": "offload_restore_seconds",
@@ -78,7 +79,7 @@ def step_row(group, task, record):
         row[field] = c["mismatch_count"] if c else None
         if c is None or row[field] is None:
             why[field] = f"post-update {name} audit verification.json missing"
-    gen, sync = row["rollout_seconds"], row["weight_sync_seconds"]
+    gen, sync = row["rollout_seconds"], row["rollout_setup_sync_seconds"]
     row["generation_seconds"] = gen
     if gen is not None and record["response_tokens"] is not None:
         row["rollout_tok_s"] = record["response_tokens"] / gen
@@ -88,7 +89,7 @@ def step_row(group, task, record):
     why["kl"] = KL_REASON
     why.setdefault("rollout_tok_s", why.get("rollout_seconds"))
     why.setdefault("generation_seconds", why.get("rollout_seconds"))
-    why.setdefault("rollout_phase_seconds", why.get("weight_sync_seconds") or why.get("rollout_seconds"))
+    why.setdefault("rollout_phase_seconds", why.get("rollout_setup_sync_seconds") or why.get("rollout_seconds"))
     row["missing"] = {f: why.get(f) or "evidence missing" for f in FIELDS if row[f] is None}
     if record.get("attempted_error"):  # refused update: step 1 exists but is not an effective GRPO step
         row["attempted_error"] = record["attempted_error"]
@@ -116,21 +117,33 @@ def fixed_row(group, verification, source):
     return row
 
 
-def recipes_commit():
+def tooling_commit():
+    """Commit of the report-tooling checkout: git HEAD of this directory, else env RLK_REPORT_COMMIT, else None."""
     try:
         out = subprocess.run(
             ["git", "-C", str(Path(__file__).resolve().parent), "rev-parse", "HEAD"], capture_output=True, text=True, check=True
         )
-        return out.stdout.strip() or None
+        if out.stdout.strip():
+            return dict(commit=out.stdout.strip(), source="git rev-parse HEAD of the report tooling checkout")
     except (OSError, subprocess.CalledProcessError):
-        return None
+        pass
+    env = os.environ.get("RLK_REPORT_COMMIT", "").strip()
+    if env:
+        return dict(commit=env, source="environment variable RLK_REPORT_COMMIT (no git checkout available)")
+    return dict(commit=None, source="unavailable: no git checkout of the report tooling and RLK_REPORT_COMMIT is not set")
 
 
-def group_config(name, profile, root, state, source):
+def runtime_lock_commit(runtime_lock):
+    lock = agg.read(runtime_lock, {}) if runtime_lock else {}
+    return lock.get("recipe_commit")
+
+
+def group_config(name, profile, root, state, source, lock_commit=None):
     prov = agg.read(root / "provenance.json", {}) if root else {}
     sources = prov.get("sources") or {}
     actor, rollout = profile["actor"], profile["rollout"]
     ref = state.get("correctness_from") or {}
+    tooling = tooling_commit()
     return dict(
         group=name,
         actor_pp=actor["pp"], actor_tp=actor["tp"], actor_ep=actor["ep"], actor_etp=actor["etp"], actor_dp=actor["dp"],
@@ -139,7 +152,12 @@ def group_config(name, profile, root, state, source):
         image_id=prov.get("image_id"),
         rl_kernel_commit=(sources.get("kernel") or {}).get("commit"),
         verl_commit=(sources.get("verl") or {}).get("commit"),
-        recipes_commit=prov.get("recipe_commit") or recipes_commit(),
+        recipes_commit=prov.get("recipe_commit") or lock_commit,
+        recipes_commit_source="run provenance.json recipe_commit" if prov.get("recipe_commit") else (
+            "runtime lock recipe_commit (the commit the image was built from)" if lock_commit else "unavailable: neither run provenance nor runtime lock has recipe_commit"
+        ),
+        report_tooling_commit=tooling["commit"],
+        report_tooling_commit_source=tooling["source"],
         run_id=root.name if root else None,
         run_root=str(root) if root else None,
         correctness_run_id=source[0].name if source else None,
@@ -148,11 +166,12 @@ def group_config(name, profile, root, state, source):
     )  # fmt: skip
 
 
-def load_groups(run_roots, prefer=None):
+def load_groups(run_roots, prefer=None, runtime_lock=None):
     """Selected groups (N1..N5 order, only those a supplied run selected) with rows, cells and config."""
     chosen = agg.pick_runs(run_roots, prefer)
     targets = {p["id"]: p for p in profiles()}
     groups, warnings = {}, []
+    lock_commit = runtime_lock_commit(runtime_lock)
     for g in agg.GROUPS:
         if g not in chosen:
             continue
@@ -175,7 +194,7 @@ def load_groups(run_roots, prefer=None):
             notes.append("fixed: fixed-rollout/verification.json absent")
         groups[g] = dict(
             name=g,
-            config=group_config(g, targets[g], root, state, source),
+            config=group_config(g, targets[g], root, state, source, lock_commit),
             rows=rows,
             cells=cells,
             copy_cells=copy_cells,
@@ -215,7 +234,7 @@ SECTIONS = {
     "policy_loss": "loss/policy",
     "rollout_seconds": "timing/rollout",
     "rollout_phase_seconds": "timing/rollout_phase",
-    "weight_sync_seconds": "timing/weight_sync",
+    "rollout_setup_sync_seconds": "timing/rollout_setup_and_weight_sync",
     "actor_logprob_seconds": "timing/actor_logprob",
     "actor_train_seconds": "timing/actor_train",
     "offload_restore_seconds": "timing/offload_restore",

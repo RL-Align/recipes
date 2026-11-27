@@ -43,7 +43,7 @@ def test_rows_per_step_and_metric_sources(tmp_path):
     assert fixed["step"] == 0 and fixed["compared_count"] == 100 and fixed["mismatch_count"] == 0
     r2 = by_task(rows, "dapo")[1]
     assert r2["step"] == 2 and r2["effective"]
-    assert r2["generation_seconds"] == pytest.approx(4.0) and r2["weight_sync_seconds"] == pytest.approx(5.0)
+    assert r2["generation_seconds"] == pytest.approx(4.0) and r2["rollout_setup_sync_seconds"] == pytest.approx(5.0)
     assert r2["rollout_phase_seconds"] == pytest.approx(9.0)
     assert r2["rollout_tok_s"] == pytest.approx(6 / 4.0) and r2["rollout_tok_per_active_gpu_s"] == pytest.approx(1.5)
     assert r2["actor_logprob_seconds"] == pytest.approx(3.0) and r2["actor_train_seconds"] == pytest.approx(6.0)
@@ -65,12 +65,12 @@ def test_missing_evidence_is_omitted_and_listed(tmp_path):
     (run / "N1/dapo/v1-generate/execution.json").unlink()  # step 2 weight sync evidence gone
     groups, _ = rd.load_groups([run])
     r2 = by_task(groups["N1"]["rows"], "dapo")[1]
-    assert r2["weight_sync_seconds"] is None and r2["rollout_phase_seconds"] is None
-    assert "weight_sync_seconds" in r2["missing"]
+    assert r2["rollout_setup_sync_seconds"] is None and r2["rollout_phase_seconds"] is None
+    assert "rollout_setup_sync_seconds" in r2["missing"]
     assert any("copy: no steps" in n for n in groups["N1"]["notes"])
     runs = wr.payloads(groups)
-    assert not any("dapo/timing/weight_sync" in k for k in runs[0]["history"][2])  # omitted, not zero
-    assert any("dapo/step2/weight_sync_seconds" in m for m in runs[0]["summary"]["missing"])
+    assert not any("dapo/timing/rollout_setup_and_weight_sync" in k for k in runs[0]["history"][2])  # omitted, not zero
+    assert any("dapo/step2/rollout_setup_sync_seconds" in m for m in runs[0]["summary"]["missing"])
 
 
 def test_nonfinite_policy_loss_is_not_a_number(tmp_path):
@@ -152,7 +152,7 @@ def test_plots_and_rounds_csv(tmp_path):
     out = tmp_path / "plots"
     out.mkdir()
     plot.write_rounds(out / "rounds.csv", rows)
-    plot.write_summary(out / "summary.json", groups, rows, "cmd")
+    plot.write_summary(out / "summary.json", groups, rows)
     plot.matrix_png(plt, groups, out)
     plot.summary_png(plt, groups, rows, out)
     plot.trajectories_png(plt, groups, rows, out)
@@ -170,7 +170,7 @@ def test_package_zip_contents_and_secret_scan(tmp_path):
 
     pk = _load(SCRIPTS / "package_report.py", "seven_package_report")
     run = run_with(tmp_path)
-    result = pk.build([run], tmp_path / "out" / "report.zip", wandb=FakeWandb())
+    result = pk.build([run], tmp_path / "out" / "report.zip", runtime_lock=fx.lock_file(tmp_path), wandb=FakeWandb())
     names = zipfile.ZipFile(result["zip"]).namelist()
     for part in ("raw/rounds.csv", "raw/rounds.json", "matrix.md", "SYNC.md", "figures/performance-matrix.png", "config/N1-config.json"):
         assert f"dsv4-7l-report/{part}" in names
@@ -198,8 +198,13 @@ def attempted_run(tmp_path, selected=("N1",), ids=(1, 2, 3), effective_steps=0):
             fx.build_group(run, g, "dapo", steps=effective_steps)
         k = effective_steps + 1
         base = run / g / "dapo"
-        samples = [dict(response_ids=list(ids), raw_reward=-1.0), dict(response_ids=[7, 8], raw_reward=-1.0)]
-        fx.dump(base / f"v{k - 1}-generate/generated-batch.json", dict(samples=samples, response_tokens=5, generation_seconds=2.0))
+        evidence = dict(reward_evidence=dict(score=-1.0, acc=False, pred="[INVALID]"), reward_source="verl.test.compute_score")
+        samples = [dict(response_ids=list(ids), raw_reward=-1.0, **evidence), dict(response_ids=[7, 8], raw_reward=-1.0, **evidence)]
+        request = dict(max_tokens=3, prompts=[dict(source_row=128 + 2 * (k - 1) + i) for i in range(2)])
+        fx.dump(
+            base / f"v{k - 1}-generate/generated-batch.json",
+            dict(samples=samples, response_tokens=5, generation_seconds=2.0, request=request),
+        )
         fx.dump(base / f"v{k - 1}-generate/execution.json", dict(seconds=9.0))
         rows = [dict(expected_tokens=3, compared_tokens=3, mismatch_count=0, mean_abs_diff=0.0, max_abs_diff=0.0),
                 dict(expected_tokens=2, compared_tokens=2, mismatch_count=0, mean_abs_diff=0.0, max_abs_diff=0.0)]  # fmt: skip
@@ -221,7 +226,7 @@ def test_attempted_step_row_is_non_effective_with_reasons(tmp_path):
     r = dapo[0]
     assert r["attempted_error"].endswith("rank 0") and r["compared_count"] == 5 and r["mismatch_count"] == 0
     assert r["actor_logprob_seconds"] == pytest.approx(2.5) and r["reward"] == pytest.approx(-1.0)
-    assert r["generation_seconds"] == pytest.approx(2.0) and r["weight_sync_seconds"] == pytest.approx(7.0)
+    assert r["generation_seconds"] == pytest.approx(2.0) and r["rollout_setup_sync_seconds"] == pytest.approx(7.0)
     for field in ("actor_train_seconds", "policy_loss", "total_train_seconds", "e2e_seconds", "audit_seconds", "audit_fresh_mismatch"):
         assert r[field] is None and "refused" in r["missing"][field]
     hist = wr.payloads(groups)[0]["history"]
@@ -242,9 +247,11 @@ def test_matrix_shows_attempted_values_marked_and_never_effective(tmp_path):
         assert cells[key]["value"] == "N/A" and "refused" in cells[key]["reason"] and "marker" not in cells[key]
     assert cells["target_workload"]["value"] == "FAIL"
     verifier = cells["independent_verifier"]
-    assert verifier["value"] == "N/A" and verifier["reason"].startswith("not run: no effective DAPO update")
+    assert verifier["value"] == "BLOCKED" and verifier["reason"].startswith("no effective DAPO update to verify")
+    assert "marker" not in cells["effective_steps"]  # a refused update is never counted: no dagger on the count
     md = (tmp_path / "out/matrix.md").read_text(encoding="utf-8")
-    assert "| Effective GRPO Steps | 0/3† |" in md and "| **Mismatch Count** | 0† |" in md
+    assert "| Effective GRPO Steps | 0/3 |" in md and "| **Mismatch Count** | 0† |" in md
+    assert "| Independent Verifier | BLOCKED | BLOCKED |" in md  # N2.. are BLOCKED groups: same literal, reasons in matrix.json
     assert "zero-advantage guard (all 2 rewards -1" in md and "no actor train, policy loss, audit or end-to-end data" in md
     assert out["copy_cells"]["N1"]["verified_updates"] == 3 and out["copy_cells"]["N1"]["three_update"] == "PASS"
     matrix = json.loads((tmp_path / "out/matrix.json").read_text())
@@ -306,6 +313,95 @@ def test_attempted_step_in_package_matrix_and_plots(tmp_path):
     for fn in (plot.summary_png, plot.trajectories_png, plot.consistency_png, plot.logp_png):
         fn(plt, groups, rows, out)
     assert (out / "performance-matrix.png").stat().st_size > 0
-    result = pk.build([run], tmp_path / "pkg" / "r.zip", wandb=FakeWandb())
+    result = pk.build([run], tmp_path / "pkg" / "r.zip", runtime_lock=fx.lock_file(tmp_path), wandb=FakeWandb())
     text = zipfile.ZipFile(result["zip"]).read("dsv4-7l-report/matrix.md").decode()
     assert "† DAPO update 1 measured through actor logprob" in text and "DAPO rollout token identity" in text
+
+
+def test_footnote_cause_notes_and_rename_are_evidence_derived(tmp_path):
+    out = rd.agg.aggregate([attempted_run(tmp_path)], tmp_path / "out", fx.lock_file(tmp_path))
+    md = (tmp_path / "out/matrix.md").read_text(encoding="utf-8")
+    # cap comes from the recorded request (3), not a literal: 1 of the 2 samples has len 3
+    assert "Cause (from the recorded rollout batch, N1): 1/2 responses at the 3-token response cap; 2/2 samples with reward_evidence pred \"[INVALID]\"" in md
+    assert "reward source verl.test.compute_score (native reward function, unchanged)" in md
+    assert "| Rollout Setup + Weight Sync Time (s/step) | 7† |" in md and "| Weight Sync Time" not in md
+    assert "Achieved: DAPO effective updates N1 0/3; values marked † come from the refused attempted update (N1 update 1; training-batch parity only, no post-update audit)." in md
+    assert "GRPO horizon (target): 3 effective updates" in md and "Longest-sample Throughput assumes" in md
+    assert "DAPO prompt selection" in md and "update 1: source rows 128-129" in md
+    labels = [m["metric"] for m in json.loads((tmp_path / "out/matrix.json").read_text())["rows"]]
+    assert "Rollout Setup + Weight Sync Time (s/step)" in labels
+    assert out["cells"]["N1"]["rollout_setup_sync_seconds"]["footnote"]
+
+
+def test_cause_is_reported_per_group_when_counts_differ(tmp_path):
+    agg = rd.agg
+    run = attempted_run(tmp_path, selected=("N1", "N2"))
+    path = run / "N2/dapo/v0-generate/generated-batch.json"
+    batch = json.loads(path.read_text())
+    batch["samples"][1]["reward_evidence"]["pred"] = "5"  # one valid prediction in N2 only
+    path.write_text(json.dumps(batch))
+    agg.aggregate([run], tmp_path / "out", fx.lock_file(tmp_path))
+    md = (tmp_path / "out/matrix.md").read_text(encoding="utf-8")
+    assert "per group: N1: 1/2 responses at the 3-token response cap; 2/2 samples" in md and "N2: 1/2 responses at the 3-token response cap; 1/2 samples" in md
+
+
+def test_achieved_note_absent_when_all_updates_effective(tmp_path):
+    run = run_with(tmp_path, copy=False)
+    rd.agg.aggregate([run], tmp_path / "out", fx.lock_file(tmp_path))
+    md = (tmp_path / "out/matrix.md").read_text(encoding="utf-8")
+    assert "Achieved:" not in md and "Cause (" not in md and "| Effective GRPO Steps | 3/3 |" in md
+
+
+def test_row_ranges_and_prompt_rows():
+    assert rd.agg.row_ranges([130, 128, 129, 132]) == "128-130, 132"
+
+
+def test_commit_fields_from_lock_and_tooling(tmp_path, monkeypatch):
+    run = run_with(tmp_path, copy=False)
+    fx.dump(run / "provenance.json", dict(image_id="img", sources=dict(kernel=dict(commit="k1"), verl=dict(commit="v1"))))
+    monkeypatch.setenv("RLK_REPORT_COMMIT", "tool123")
+    monkeypatch.setattr(rd.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(OSError("no git")))
+    cfg = rd.load_groups([run], runtime_lock=fx.lock_file(tmp_path))[0]["N1"]["config"]
+    assert (cfg["recipes_commit"], cfg["rl_kernel_commit"], cfg["verl_commit"]) == ("r1", "k1", "v1")
+    assert cfg["report_tooling_commit"] == "tool123" and "RLK_REPORT_COMMIT" in cfg["report_tooling_commit_source"]
+    monkeypatch.delenv("RLK_REPORT_COMMIT")
+    none = rd.tooling_commit()
+    assert none["commit"] is None and "unavailable" in none["source"]
+    assert rd.load_groups([run])[0]["N1"]["config"]["recipes_commit"] is None  # no lock, no invention
+
+
+def test_package_matrix_identical_and_single_wandb_set(tmp_path, monkeypatch):
+    pytest.importorskip("matplotlib")
+    import zipfile
+
+    class DiskWandb(FakeWandb):
+        def init(self, **kw):
+            d = Path(kw["dir"]) / "wandb" / f"offline-run-20260101_000000-{kw['id']}"
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "run.wandb").write_text(kw["id"])
+            return super().init(**kw)
+
+    pk = _load(SCRIPTS / "package_report.py", "seven_package_report4")
+    monkeypatch.setenv("RLK_REPORT_COMMIT", "tool123")
+    monkeypatch.setattr(rd.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(OSError("no git")))
+    run, lock = attempted_run(tmp_path), fx.lock_file(tmp_path)
+    rd.agg.aggregate([run], tmp_path / "matrix", lock)
+    wb = tmp_path / "report" / "wandb"
+    result = pk.build([run], tmp_path / "pkg" / "r.zip", runtime_lock=lock, wandb=DiskWandb(), matrix_dir=tmp_path / "matrix", wandb_dir=wb)
+    z = zipfile.ZipFile(result["zip"])
+    assert z.read("dsv4-7l-report/matrix.md") == (tmp_path / "matrix/matrix.md").read_bytes()
+    assert z.read("dsv4-7l-report/matrix.json") == (tmp_path / "matrix/matrix.json").read_bytes()
+    runs = sorted(n for n in z.namelist() if n.endswith("run.wandb"))
+    assert len(runs) == 2 and len({Path(n).parent.name for n in runs}) == 2  # N1 + summary, once each
+    assert sorted(p.parent.name for p in wb.rglob("run.wandb")) == sorted(Path(n).parent.name for n in runs)  # the report-dir set
+    assert z.read("dsv4-7l-report/raw/summary.json").decode().startswith("{")
+    sync = z.read("dsv4-7l-report/SYNC.md").decode()
+    assert "exactly one set" in sync and sync.count("wandb sync ") == 2
+    versions = json.loads(z.read("dsv4-7l-report/config/versions.json"))
+    assert versions["source_commits"]["recipes_commit"] == "r1" and versions["report_tooling_commit"] == "tool123"
+    assert json.loads(z.read("dsv4-7l-report/config/N1-config.json"))["recipes_commit"] == "r1"
+    with pytest.raises(FileExistsError):  # a second set into the same wandb dir is refused
+        pk.build([run], tmp_path / "pkg" / "r2.zip", runtime_lock=lock, wandb=DiskWandb(), matrix_dir=tmp_path / "matrix", wandb_dir=wb)
+    # without matrix_dir aggregate runs itself and yields the same bytes
+    again = pk.build([run], tmp_path / "pkg" / "r3.zip", runtime_lock=lock, wandb=None)
+    assert zipfile.ZipFile(again["zip"]).read("dsv4-7l-report/matrix.md") == (tmp_path / "matrix/matrix.md").read_bytes()

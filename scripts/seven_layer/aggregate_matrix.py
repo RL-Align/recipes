@@ -89,10 +89,10 @@ ROWS = [
         "Actor Logprob Time + actor_train_and_checkpoint_seconds (train, checkpoint save, policy export; in-process).",
     ),
     (
-        "Weight Sync Time (s/step)",
-        "weight_sync_seconds",
-        "Rollout phase non-generation time: engine start + policy load/sync + readback. Per step: "
-        "v{n-1}-generate/execution.json seconds - generated-batch.json generation_seconds.",
+        "Rollout Setup + Weight Sync Time (s/step)",
+        "rollout_setup_sync_seconds",
+        "Rollout phase wall time minus generation: engine start + policy load/weight sync + readback (not weight "
+        "sync alone). Per step: v{n-1}-generate/execution.json seconds - generated-batch.json generation_seconds.",
     ),
     (
         "Offload/Restore Time (s/step)",
@@ -145,7 +145,7 @@ STATIC_NA = {
     "kl_loss": "KL loss not enabled (use_kl_loss False)",
 }
 PERF_KEYS = [
-    "weight_sync_seconds",
+    "rollout_setup_sync_seconds",
     "offload_restore_seconds",
     "policy_loss",
     "rollout_seconds",
@@ -240,7 +240,7 @@ def footnotes(cells, columns):
         for c in cells[g].values():
             if c.get("footnote") and c["footnote"] not in out:
                 out.append(c["footnote"])
-    return out
+    return out + (cause_notes(cells, columns) if out else [])
 
 
 def fmt(value):
@@ -366,9 +366,9 @@ def step_record(base, step, profile, warnings):
     # Weight sync: rollout phase wall time minus the generation itself.
     rollout_exec = read(base / f"v{n - 1}-generate" / "execution.json")
     if rollout_exec and "seconds" in rollout_exec and gen and "generation_seconds" in gen:
-        metrics["weight_sync_seconds"] = rollout_exec["seconds"] - gen["generation_seconds"]
+        metrics["rollout_setup_sync_seconds"] = rollout_exec["seconds"] - gen["generation_seconds"]
     else:
-        why["weight_sync_seconds"] = f"v{n - 1}-generate/execution.json or generation_seconds missing"
+        why["rollout_setup_sync_seconds"] = f"v{n - 1}-generate/execution.json or generation_seconds missing"
     # Offload/restore: actor phase wall time outside the measured compute.
     actor_exec = read(base / f"update-{n}" / "execution.json")
     if actor_exec and "seconds" in actor_exec and updated and metrics["actor_logprob_seconds"] is not None:
@@ -479,11 +479,51 @@ def attempted_record(base, k, profile, warnings):
         f"\u2020 DAPO update {k} measured through actor logprob + FP32 bitwise parity (training batch, one rank); "
         f"update {guard} ({reward_text}"
         + (f", nonzero advantages {nonzero}" if nonzero is not None else "")
-        + f"; error: {error}); no actor train, policy loss, audit or end-to-end data. Weight Sync = "
+        + f"; error: {error}); no actor train, policy loss, audit or end-to-end data. Rollout Setup + Weight Sync = "
         f"v{k - 1} rollout phase wall time minus generation (engine start + initial weight load). "
         "Not an effective GRPO update."
     )
+    record["attempted_cause"] = attempted_cause(base, k, profile)
     return record
+
+
+def attempted_cause(base, k, profile):
+    """Evidence-derived facts about the rollout batch of the refused update (counts only what the files record)."""
+    gen = read(base / f"v{k - 1}-generate" / "generated-batch.json")
+    samples = (gen or {}).get("samples") or []
+    if not samples:
+        return None
+    cap = ((gen.get("request") or {}).get("max_tokens")) or profile["target_load"]["response_cap"]
+    at_cap = sum(1 for s in samples if len(s["response_ids"]) == cap)
+    preds = [(s.get("reward_evidence") or {}).get("pred") for s in samples]
+    invalid = sum(1 for p in preds if p == "[INVALID]")
+    sources = sorted({s["reward_source"] for s in samples if s.get("reward_source")})
+    return dict(samples=len(samples), cap=cap, at_cap=at_cap, invalid=invalid, reward_sources=sources)
+
+
+def cause_text(cause):
+    text = (
+        f"{cause['at_cap']}/{cause['samples']} responses at the {cause['cap']}-token response cap; "
+        f"{cause['invalid']}/{cause['samples']} samples with reward_evidence pred \"[INVALID]\""
+    )
+    if cause["reward_sources"]:
+        text += f"; reward source {', '.join(cause['reward_sources'])} (native reward function, unchanged)"
+    return text
+
+
+def cause_notes(cells, columns):
+    """One line with the evidence-derived cause of the dagger; per group when the groups differ."""
+    found = {}
+    for g in columns:
+        for c in cells[g].values():
+            if c.get("cause"):
+                found[g] = cause_text(c["cause"])
+                break
+    if not found:
+        return []
+    if len(set(found.values())) == 1:
+        return [f"† Cause (from the recorded rollout batch, {', '.join(found)}): {next(iter(found.values()))}."]
+    return ["† Cause (from the recorded rollout batch), per group: " + "; ".join(f"{g}: {t}" for g, t in found.items()) + "."]
 
 
 def correctness_source(name, state):
@@ -548,8 +588,8 @@ def group_cells(name, profile, state, group_dir, warnings, correctness=None):
     if digest and not blocked:
         cells["dapo_rollout_sha256"].update(sha256=digest[0], samples=digest[1], tokens=digest[2])
     if dapo["attempted"] and not blocked:
-        for key in dapo["marked"] | {"effective_steps"}:
-            cells[key].update(marker="\u2020", footnote=dapo["attempted"]["attempted_note"])
+        for key in dapo["marked"]:  # effective_steps keeps its plain "n/3": a refused update is never counted
+            cells[key].update(marker="\u2020", footnote=dapo["attempted"]["attempted_note"], cause=dapo["attempted"].get("attempted_cause"))
     gated("target_workload", lambda: target_workload(dapo, uv, state))
     gated("independent_verifier", lambda: verifier_status(dapo, uv, fixed))
     copy_uv = copy["update_verification"]
@@ -610,8 +650,9 @@ def verifier_status(result, uv, fixed):
         return None, "no verification evidence"
     if not result["used"] and not uv and all(r.get("attempted_error") for r in result["records"]):
         # Nothing to verify: the only DAPO update was refused before backward, so no verifier ran.
-        return None, (
-            f"not run: no effective DAPO update to verify (update refused); fixed-weight verifier "
+        # BLOCKED here means "prerequisite missing" (no effective update), the group itself did run.
+        return BLOCKED, (
+            f"no effective DAPO update to verify (update refused); fixed-weight verifier "
             f"{(fixed or {}).get('status', 'missing')}; copy-task verifier: see the Correctness table"
         )
     return FAIL, "some verification is missing or not PASS: " + ", ".join(str(s) for s in statuses)
@@ -700,7 +741,64 @@ def write_json(path, value):
     Path(path).write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
 
 
-def notes(revision):
+def row_ranges(rows):
+    """[128, 129, 130, 132] -> '128-130, 132'."""
+    parts = []
+    for r in sorted(set(rows)):
+        if parts and r == parts[-1][1] + 1:
+            parts[-1][1] = r
+        else:
+            parts.append([r, r])
+    return ", ".join(str(a) if a == b else f"{a}-{b}" for a, b in parts)
+
+
+def dapo_prompt_rows(base):
+    """{update: [source_row, ...]} from the recorded requests of dapo/v{n-1}-generate (stops at the first absent one)."""
+    out, n = {}, 1
+    while True:
+        gen = read(Path(base) / f"v{n - 1}-generate" / "generated-batch.json")
+        prompts = ((gen or {}).get("request") or {}).get("prompts")
+        if not prompts:
+            return out
+        out[n] = [p["source_row"] for p in prompts if "source_row" in p]
+        n += 1
+
+
+def evidence_notes(per_group):
+    """Notes derived from the retained evidence (never hardcoded per group).
+
+    per_group: {group: dict(effective=n, attempted=update or None, prompt_rows={update: [rows]})} for run groups.
+    """
+    out = []
+    if any(v["effective"] < UPDATES for v in per_group.values()):
+        text = "Achieved: DAPO effective updates " + ", ".join(f"{g} {v['effective']}/{UPDATES}" for g, v in per_group.items())
+        refused = {g: v["attempted"] for g, v in per_group.items() if v["attempted"]}
+        if refused:
+            text += (
+                "; values marked † come from the refused attempted update ("
+                + ", ".join(f"{g} update {k}" for g, k in refused.items())
+                + "; training-batch parity only, no post-update audit)"
+            )
+        out.append(text + ".")
+    selections = {g: v["prompt_rows"] for g, v in per_group.items() if v["prompt_rows"]}
+    if selections:
+
+        def render(rows):
+            return "; ".join(f"update {n}: source rows {row_ranges(r)}" for n, r in sorted(rows.items()))
+
+        head = (
+            "DAPO prompt selection (source_row of the recorded rollout requests; prepare_requests.py skips the first "
+            "128 rows of the pinned parquet and any prompt over the prompt cap, keeps file order and cycles the "
+            "selected prompts): "
+        )
+        if len({json.dumps(r, sort_keys=True) for r in selections.values()}) == 1:
+            out.append(head + render(next(iter(selections.values()))) + f" (identical in {', '.join(selections)}).")
+        else:
+            out.append(head + "; ".join(f"{g}: {render(r)}" for g, r in selections.items()) + ".")
+    return out
+
+
+def notes(revision, evidence=()):
     return [
         "Hardware: 1 node, 8x AMD Instinct MI300X.",
         "Model: DeepSeek V4, original layers 0-6.",
@@ -709,21 +807,24 @@ def notes(revision):
         f"Workload: {ACTIVE_NOTE}.",
         "Prompt limit: 1024 tokens.",
         "Response limit: 7168 tokens.",
-        "GRPO horizon: 3 effective updates per configuration.",
-        "Consistency: strict FP32 bitwise comparison of all valid response tokens with independent post-update verification.",
+        "GRPO horizon (target): 3 effective updates per configuration; see Achieved below when a group fell short.",
+        "Consistency (target design): strict FP32 bitwise comparison of all valid response tokens with independent post-update verification of each effective update.",
         "Resource conditions: phase-wise GPU reuse and verified GPU0 sharing exception where applicable.",
         "Three-step short tests are not steady-state performance; no native baseline/speedup is claimed.",
-        "Performance and training rows are arithmetic means over the 3 effective DAPO-Math-17k updates (the copy task is excluded).",
+        "Performance and training rows (target) are arithmetic means over the 3 effective DAPO-Math-17k updates (the copy task is excluded); a group without effective updates shows the values of its refused attempt, marked.",
         "Compared Tokens / Mismatch Count / Mean Abs Diff / Max Abs Diff are cumulative over the DAPO trajectory: "
         "per update the training-batch parity, post-update fresh audit and post-update fixed audit "
         "(Mean Abs Diff weighted by compared tokens, Max = maximum); copy-task consistency is reported separately.",
-        "Cells: measured value, N/A (evidence absent or not applicable; reasons in matrix.json), FAIL or BLOCKED.",
+        "Cells: measured value, N/A (evidence absent or not applicable; reasons in matrix.json), FAIL or BLOCKED "
+        "(group not run, or a prerequisite is missing, e.g. Independent Verifier is BLOCKED when there is no effective DAPO update to verify; reason in matrix.json).",
+        "Longest-sample Throughput assumes the batch generation time equals the longest sample's time (per-sample wall time is not recorded), "
+        "so it is a lower bound of that sample's real rate.",
         "A dagger marks a value of an attempted but refused (non-effective) DAPO update: it is never averaged into effective-step "
         "means and never counted as an effective GRPO step.",
-    ]
+    ] + list(evidence)
 
 
-def render_md(columns, cells, copy_cells, revision):
+def render_md(columns, cells, copy_cells, revision, evidence=()):
     lines = [
         "### Seven-layer DeepSeek V4 — ROCm Performance & Consistency Matrix",
         "",
@@ -734,7 +835,7 @@ def render_md(columns, cells, copy_cells, revision):
         lines.append(f"| {label} | " + " | ".join(show(cells[g][key]) for g in columns) + " |")
     lines += ["", rollout_identity(cells, columns)["text"]]
     lines += [""] + footnotes(cells, columns)
-    lines += ["", "Notes:", ""] + [f"- {n}" for n in notes(revision)]
+    lines += ["", "Notes:", ""] + [f"- {n}" for n in notes(revision, evidence)]
     lines += [
         "",
         "### Correctness (copy task)",
@@ -762,7 +863,7 @@ def aggregate(run_roots, output, runtime_lock, prefer=None):
     output.mkdir(parents=True, exist_ok=True)
     targets = {p["id"]: p for p in profiles()}
     warnings, cells, copy_cells, groups = [], {}, {}, {}
-    index, provenance_runs, correctness_runs = {}, {}, {}
+    index, provenance_runs, correctness_runs, per_group = {}, {}, {}, {}
     for g in GROUPS:
         if g in chosen:
             root, state = chosen[g]
@@ -818,13 +919,20 @@ def aggregate(run_roots, output, runtime_lock, prefer=None):
             index[g]["correctness_files"] = index_files(source[0], source[0] / g / "copy")
             correctness_runs.setdefault(source[0], []).append(g)
         provenance_runs.setdefault(root, []).append(g)
+        if state.get("status", "NOT_RUN") not in BLOCKED_STATES:
+            per_group[g] = dict(
+                effective=len(dapo["used"]),
+                attempted=dapo["attempted"]["update"] if dapo["attempted"] else None,
+                prompt_rows=dapo_prompt_rows(gdir / "dapo"),
+            )
     run_index = {}
     for root in provenance_runs:
         shared = root / "common-fixed-actor"
         run_index[str(root)] = index_files(root, shared) if shared.exists() else []
     write_json(output / "evidence-index.json", dict(per_group=index, per_run_common=run_index))
     columns = GROUPS
-    (output / "matrix.md").write_text(render_md(columns, cells, copy_cells, revision), encoding="utf-8")
+    evidence = evidence_notes(per_group)
+    (output / "matrix.md").write_text(render_md(columns, cells, copy_cells, revision, evidence), encoding="utf-8")
     with open(output / "matrix.csv", "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["Metric"] + columns)
@@ -836,7 +944,7 @@ def aggregate(run_roots, output, runtime_lock, prefer=None):
             title="Seven-layer DeepSeek V4 — ROCm Performance & Consistency Matrix",
             columns=columns,
             dataset_revision=revision,
-            notes=notes(revision),
+            notes=notes(revision, evidence),
             rows=[
                 dict(metric=label.strip("*"), key=key, definition=definition, cells={g: cells[g][key] for g in columns})
                 for label, key, definition in ROWS

@@ -61,6 +61,9 @@ def payloads(groups):
         notes = [c["footnote"] for c in g["cells"].values() if c.get("footnote")]
         if notes:
             summary["dapo/attempted_step_note"] = notes[0]
+            cause = next((c["cause"] for c in g["cells"].values() if c.get("cause")), None)
+            if cause:
+                summary["dapo/attempted_step_cause"] = rd.agg.cause_text(cause)
         summary["missing"] = missing_list(g)
         runs.append(
             dict(id=run_id(name), name=run_id(name), group=name, config=cfg, history=history(g["rows"]), summary=summary, column=column)
@@ -112,6 +115,7 @@ def main():
     ap.add_argument("--runs", nargs="+", action="extend", required=True, type=Path, help="run roots (runs-N/<id>)")
     ap.add_argument("--prefer", help="run root (or its name) that wins when a group appears in several runs")
     ap.add_argument("--dir", type=Path, required=True, help="wandb output dir, e.g. $WORK/results-N/wandb")
+    ap.add_argument("--runtime-lock", type=Path, help="runtime lock (supplies recipes_commit when the run provenance lacks it)")
     ap.add_argument("--mode", choices=["offline", "online", "disabled"], default="offline")
     ap.add_argument("--entity", default=DEFAULT_ENTITY)
     ap.add_argument("--project", default=DEFAULT_PROJECT)
@@ -120,7 +124,7 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="print the payloads as JSON; do not import wandb")
     args = ap.parse_args()
     try:
-        groups, warnings = rd.load_groups(args.runs, args.prefer)
+        groups, warnings = rd.load_groups(args.runs, args.prefer, args.runtime_lock)
     except (ValueError, FileExistsError) as error:
         sys.exit(f"error: {error}")
     for w in warnings:

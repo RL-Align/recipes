@@ -388,7 +388,7 @@ def test_aggregate_means_and_cumulative_consistency(tmp_path):
     assert value("e2e_seconds") == pytest.approx(200.0)
     assert value("response_length") == pytest.approx(3.0) and value("reward") == pytest.approx(0.5)
     assert value("target_workload") == "PASS" and value("independent_verifier") == "PASS"
-    assert value("policy_loss") == pytest.approx(0.6) and value("weight_sync_seconds") == pytest.approx(5.0)
+    assert value("policy_loss") == pytest.approx(0.6) and value("rollout_setup_sync_seconds") == pytest.approx(5.0)
     assert value("offload_restore_seconds") == pytest.approx(7.0)
     for key in ("reference_logprob_seconds", "kl_loss"):
         assert value(key) == "N/A" and cells[key]["reason"]
@@ -518,7 +518,7 @@ def test_loss_sync_and_offload_are_na_only_when_evidence_is_missing(tmp_path):
     for rank in range(3):
         (run / f"N1/dapo/update-1/native-loss-rank{rank}-v1.json").unlink()
     cells = agg.aggregate([run], tmp_path / "out", lock_file(tmp_path))["cells"]["N1"]
-    for key in ("weight_sync_seconds", "offload_restore_seconds", "policy_loss"):
+    for key in ("rollout_setup_sync_seconds", "offload_restore_seconds", "policy_loss"):
         assert cells[key]["value"] == "N/A" and cells[key]["reason"]
     assert cells["rollout_seconds"]["value"] == pytest.approx(4.0)
 

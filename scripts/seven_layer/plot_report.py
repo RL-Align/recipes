@@ -21,7 +21,7 @@ DPI = 200  # high-DPI PNGs
 STYLE = {"copy": "--", "dapo": "-"}
 STAGES = [
     ("rollout_seconds", "Rollout generation"),
-    ("weight_sync_seconds", "Weight sync"),
+    ("rollout_setup_sync_seconds", "Rollout setup + weight sync"),
     ("actor_logprob_seconds", "Actor logprob"),
     ("actor_train_seconds", "Actor train"),
     ("offload_restore_seconds", "Offload/restore"),
@@ -29,7 +29,7 @@ STAGES = [
 ]
 TABLE_KEYS = [
     "actor_topology", "rollout_tp", "fixed_consistency", "effective_steps", "mismatch_count", "mean_abs_diff",
-    "rollout_seconds", "rollout_tok_per_active_gpu_s", "weight_sync_seconds", "offload_restore_seconds",
+    "rollout_seconds", "rollout_tok_per_active_gpu_s", "rollout_setup_sync_seconds", "offload_restore_seconds",
     "actor_logprob_seconds", "actor_train_seconds", "e2e_seconds", "response_length", "reward", "policy_loss",
     "target_workload", "independent_verifier",
 ]  # fmt: skip
@@ -55,10 +55,9 @@ def write_rounds(path, rows):
             w.writerow(["" if r[k] is None else r[k] for k in rd.FIELDS])
 
 
-def write_summary(path, groups, rows, command):
+def write_summary(path, groups, rows):
     out = dict(
         scope="per-step values are real evidence only; missing values are listed, never filled",
-        command=command,
         groups={
             g: dict(
                 config=v["config"],
@@ -151,7 +150,7 @@ def lines(ax, rows, groups, field, title, tasks=("copy", "dapo")):
 
 def trajectories_png(plt, groups, rows, out):
     panels = [
-        ("rollout_seconds", "Rollout generation (s)"), ("weight_sync_seconds", "Weight sync (s)"),
+        ("rollout_seconds", "Rollout generation (s)"), ("rollout_setup_sync_seconds", "Rollout setup + weight sync (s)"),
         ("actor_logprob_seconds", "Actor logprob (s)"), ("actor_train_seconds", "Actor train (s)"),
         ("rollout_tok_per_active_gpu_s", "Rollout tok/GPU/s"), ("e2e_seconds", "End-to-end step (s)"),
     ]  # fmt: skip
@@ -190,9 +189,10 @@ def main():
     ap.add_argument("--runs", nargs="+", action="extend", required=True, type=Path, help="run roots (runs-N/<id>)")
     ap.add_argument("--prefer", help="run root (or its name) that wins when a group appears in several runs")
     ap.add_argument("--output", type=Path, required=True, help="output directory (created)")
+    ap.add_argument("--runtime-lock", type=Path, help="runtime lock (supplies recipes_commit when the run provenance lacks it)")
     args = ap.parse_args()
     try:
-        groups, warnings = rd.load_groups(args.runs, args.prefer)
+        groups, warnings = rd.load_groups(args.runs, args.prefer, args.runtime_lock)
     except (ValueError, FileExistsError) as error:
         sys.exit(f"error: {error}")
     import matplotlib
@@ -203,7 +203,7 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     rows = rd.all_rows(groups)
     write_rounds(args.output / "rounds.csv", rows)
-    write_summary(args.output / "summary.json", groups, rows, " ".join(sys.argv))
+    write_summary(args.output / "summary.json", groups, rows)
     matrix_png(plt, groups, args.output)
     summary_png(plt, groups, rows, args.output)
     trajectories_png(plt, groups, rows, args.output)
