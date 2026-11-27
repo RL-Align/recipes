@@ -114,6 +114,25 @@ ROWS = [
     ),
     ("Mean Response Length", "response_length", "response_tokens / samples of the training batch, mean over steps."),
     ("Mean Reward", "reward", "Mean raw_reward of the training batch samples, mean over steps."),
+    (
+        "Mean Reward per Step",
+        "reward_per_step",
+        "Mean raw_reward of each effective update's training batch (update 1 / 2 / 3), then their arithmetic mean (= Mean Reward).",
+    ),
+    (
+        "Truncation Rate",
+        "truncation_rate",
+        "Fraction of training-batch samples that hit the response cap without EOS: reward_evidence.truncated when recorded, else "
+        "len(response_ids) == the request's max_tokens; mean over effective updates.",
+    ),
+    (
+        "Advantage Statistics",
+        "advantage_stats",
+        "From reward-advantage-rank-0.json of each update (verl compute_grpo_outcome_advantage, group-std normalized, "
+        "eps 1e-6; one advantage per sample): mean |A| and sample std of A (arithmetic means over effective updates) and "
+        "nonzero advantages / samples (summed over effective updates). Recomputed from raw_rewards/group_ids with the "
+        "same formula when the receipt lacks the statistics.",
+    ),
     ("Mean KL Loss", "kl_loss", "KL loss disabled (use_kl_loss False)."),
     (
         "Mean Policy Loss",
@@ -130,6 +149,14 @@ ROWS = [
         "(uint32 little-endian, sample order) of the samples of dapo/v0-generate/generated-batch.json.",
     ),
     (
+        "Cross-config Token/Reward Consistency",
+        "cross_config",
+        "Per group against the reference group (lowest N1-N4 present): v0 response-token sha256 and reward list equality, and "
+        "for N1-N4 the per-update trajectory (response-token sha256, rewards, post-update weight digests of updated-rank-*.json "
+        "checkpoint.state_digest). N5 (Dense DP4 / EP4) is compared on v0 only; its trajectory is reported separately. "
+        "Details in the Cross-config consistency section and matrix.json.",
+    ),
+    (
         "Target Workload",
         "target_workload",
         "PASS only if the DAPO-Math-17k trajectory completed 3 independently verified updates.",
@@ -140,6 +167,27 @@ ROWS = [
         "PASS only if fixed, every post-update (fresh+fixed) and update-verification are PASS.",
     ),
 ]
+TARGETS = {
+    "dapo": dict(short="DAPO", name="DAPO-Math-17k"),
+    "lcc": dict(short="LCC", name="Long-Context Copy (lcc)"),
+}
+LCC_TASK_NAME = "Long-Context Verifiable Sequence GRPO Benchmark (not math reasoning)"
+SMOKE_DATASET = "lccsmoke"  # diagnostic feasibility set: never part of the formal matrix
+
+
+def retarget(text, target):
+    """Rename the target dataset in a label/definition ('DAPO-Math-17k' / 'DAPO') for a non-dapo target."""
+    if target == "dapo":
+        return text
+    t = TARGETS[target]
+    return text.replace("DAPO-Math-17k", t["name"]).replace("DAPO", t["short"])
+
+
+def rows_for(target="dapo"):
+    """Matrix rows (label, key, definition) with the target dataset named; identical to ROWS for dapo."""
+    return [(retarget(label, target), key, retarget(definition, target)) for label, key, definition in ROWS]
+
+
 STATIC_NA = {
     "reference_logprob_seconds": "no reference model; use_kl_loss is False",
     "kl_loss": "KL loss not enabled (use_kl_loss False)",
@@ -160,6 +208,7 @@ PERF_KEYS = [
     "e2e_seconds",
     "response_length",
     "reward",
+    "truncation_rate",
 ]
 
 
@@ -186,6 +235,72 @@ def rank_files(directory, prefix):
     return [read(p) for _, p in sorted(found)]
 
 
+def grpo_advantages(rewards, groups, eps=1e-6):
+    """verl compute_grpo_outcome_advantage (one scalar per sample): (r - group mean) / (unbiased group std + eps)."""
+    members = {}
+    for i, g in enumerate(groups):
+        members.setdefault(g, []).append(i)
+    out = [0.0] * len(rewards)
+    for idx in members.values():
+        values = [rewards[i] for i in idx]
+        if len(values) == 1:
+            center, spread = 0.0, 1.0
+        else:
+            center = sum(values) / len(values)
+            spread = (sum((v - center) ** 2 for v in values) / (len(values) - 1)) ** 0.5
+        for i in idx:
+            out[i] = (rewards[i] - center) / (spread + eps)
+    return out
+
+
+def advantage_summary(directory):
+    """dict(samples, nonzero, mean_abs, std, source) of one update's reward-advantage receipt; None if unavailable."""
+    receipts = [r for r in rank_files(directory, "reward-advantage") if r]
+    if not receipts:
+        return None
+    r = receipts[0]  # advantages are global and identical on every rank
+    if "advantage_mean_abs" in r:
+        return dict(
+            samples=r["advantage_samples"], nonzero=r["advantage_nonzero_samples"],
+            mean_abs=r["advantage_mean_abs"], std=r["advantage_std"], source="receipt",
+        )  # fmt: skip
+    raw, ids = r.get("raw_rewards"), r.get("group_ids")
+    if not raw or not ids or len(raw) != len(ids):
+        return None
+    adv = grpo_advantages(raw, ids)
+    n = len(adv)
+    center = sum(adv) / n
+    return dict(
+        samples=n,
+        nonzero=sum(1 for a in adv if abs(a) > 1e-9),
+        mean_abs=sum(abs(a) for a in adv) / n,
+        std=(sum((a - center) ** 2 for a in adv) / (n - 1)) ** 0.5 if n > 1 else 0.0,
+        source="recomputed from raw_rewards/group_ids (same formula)",
+    )
+
+
+def advantage_total(records):
+    """Aggregate over the given step records: mean of mean|A| and std, summed counts; None if any lacks the receipt."""
+    got = [r.get("advantage") for r in records]
+    if not got or any(a is None for a in got):
+        return None
+    return dict(
+        updates=len(got),
+        mean_abs=mean(a["mean_abs"] for a in got),
+        std=mean(a["std"] for a in got),
+        nonzero=sum(a["nonzero"] for a in got),
+        samples=sum(a["samples"] for a in got),
+        source=sorted({a["source"] for a in got}),
+    )
+
+
+def advantage_cell(result):
+    total = result.get("advantage")
+    if total is None:
+        return None, "no reward-advantage receipt (or no raw_rewards/group_ids) for the effective updates"
+    return f"mean|A| {total['mean_abs']:.4g}, std {total['std']:.4g}, nonzero {total['nonzero']}/{total['samples']}", None
+
+
 def cell(value, reason=None):
     return dict(value=NA if value is None else value, reason=reason)
 
@@ -208,15 +323,15 @@ def rollout_digest(path):
     return digest.hexdigest(), len(gen["samples"]), tokens
 
 
-def rollout_identity(cells, columns):
+def rollout_identity(cells, columns, label="DAPO"):
     """Cross-group DAPO rollout token identity from the per-group digests (computed, never assumed)."""
     columns = [g for g in columns if cells[g]["dapo_rollout_sha256"]["value"] != BLOCKED]  # groups that were run
     found = {g: cells[g]["dapo_rollout_sha256"] for g in columns if cells[g]["dapo_rollout_sha256"].get("sha256")}
     if not found:
-        return dict(status=NA, text="DAPO rollout token identity: N/A (no generated-batch evidence)")
+        return dict(status=NA, text=f"{label} rollout token identity: N/A (no generated-batch evidence)")
     digests = {c["sha256"] for c in found.values()}
     counts = {(c["samples"], c["tokens"]) for c in found.values()}
-    head = "DAPO rollout token identity (sha256 over the concatenated response_ids of the samples, uint32 LE, sample order)"
+    head = f"{label} rollout token identity (sha256 over the concatenated response_ids of the samples, uint32 LE, sample order)"
     if len(digests) == 1 and len(counts) == 1 and len(found) == len(columns):
         samples, tokens = next(iter(counts))
         sha = next(iter(digests))
@@ -329,11 +444,12 @@ def step_record(base, step, profile, warnings):
             rollout_tok_per_8gpu_s=tokens / seconds / 8,
             longest_sample_tok_s=max(len(c["response_ids"]) for c in samples) / seconds,
             response_length=tokens / len(samples),
+            truncation_rate=truncation_rate(gen, profile),
             reward=mean(c["raw_reward"] for c in samples),
         )
     else:
         for key in ("rollout_seconds", "rollout_tok_per_active_gpu_s", "rollout_tok_per_8gpu_s",
-                    "longest_sample_tok_s", "response_length", "reward"):  # fmt: skip
+                    "longest_sample_tok_s", "response_length", "reward", "truncation_rate"):  # fmt: skip
             why[key] = f"v{n - 1}-generate/generated-batch.json missing or without generation_seconds"
     if parity is not None:
         ranks = rank_files(base / f"update-{n}", "training-parity")
@@ -413,14 +529,15 @@ def step_record(base, step, profile, warnings):
         components=components,
         fresh_status=(fresh or {}).get("status"),
         fixed_status=(fixed or {}).get("status"),
+        advantage=advantage_summary(base / f"update-{n}"),
     )
 
 
-def dataset_result(base, profile, warnings):
+def dataset_result(base, profile, warnings, label="DAPO"):
     base = Path(base)
     steps = read(base / "steps.json", [])
     records = [step_record(base, s, profile, warnings) for s in steps]
-    attempted = attempted_record(base, len(steps) + 1, profile, warnings)
+    attempted = attempted_record(base, len(steps) + 1, profile, warnings, label)
     if attempted:
         records.append(attempted)
     used = [r for r in records if r["effective"]]  # an attempted record is never effective
@@ -446,10 +563,14 @@ def dataset_result(base, profile, warnings):
     else:  # training-batch parity of the attempted step only (one rank)
         consistency = cumulative([attempted["components"][0]])
         marked |= {k for k, (v, _) in consistency.items() if v is not None}
+    advantage = advantage_total(used) if used else (advantage_total([attempted]) if attempted else None)
+    if not used and advantage is not None:
+        marked.add("advantage_stats")
     return dict(
         records=records,
         used=used,
         attempted=attempted,
+        advantage=advantage,
         marked=marked,
         perf=perf,
         consistency=consistency,
@@ -458,7 +579,7 @@ def dataset_result(base, profile, warnings):
     )
 
 
-def attempted_record(base, k, profile, warnings):
+def attempted_record(base, k, profile, warnings, label="DAPO"):
     """Non-effective record of `update-{k}` that steps.json does not cover (refused or failed); else None."""
     directory = base / f"update-{k}"
     if not directory.is_dir():
@@ -476,7 +597,7 @@ def attempted_record(base, k, profile, warnings):
     nonzero = adv[0].get("nonzero_advantages") if adv else None
     guard = "refused by the zero-advantage guard" if nonzero == 0 else "failed"
     record["attempted_note"] = (
-        f"\u2020 DAPO update {k} measured through actor logprob + FP32 bitwise parity (training batch, one rank); "
+        f"\u2020 {label} update {k} measured through actor logprob + FP32 bitwise parity (training batch, one rank); "
         f"update {guard} ({reward_text}"
         + (f", nonzero advantages {nonzero}" if nonzero is not None else "")
         + f"; error: {error}); no actor train, policy loss, audit or end-to-end data. Rollout Setup + Weight Sync = "
@@ -498,14 +619,14 @@ def attempted_cause(base, k, profile):
     preds = [(s.get("reward_evidence") or {}).get("pred") for s in samples]
     invalid = sum(1 for p in preds if p == "[INVALID]")
     sources = sorted({s["reward_source"] for s in samples if s.get("reward_source")})
-    return dict(samples=len(samples), cap=cap, at_cap=at_cap, invalid=invalid, reward_sources=sources)
+    has_pred = any(p is not None for p in preds)
+    return dict(samples=len(samples), cap=cap, at_cap=at_cap, invalid=invalid, has_pred=has_pred, reward_sources=sources)
 
 
 def cause_text(cause):
-    text = (
-        f"{cause['at_cap']}/{cause['samples']} responses at the {cause['cap']}-token response cap; "
-        f"{cause['invalid']}/{cause['samples']} samples with reward_evidence pred \"[INVALID]\""
-    )
+    text = f"{cause['at_cap']}/{cause['samples']} responses at the {cause['cap']}-token response cap"
+    if cause.get("has_pred", True):  # math rewards only: the token-level lcc reward has no `pred`
+        text += f"; {cause['invalid']}/{cause['samples']} samples with reward_evidence pred \"[INVALID]\""
     if cause["reward_sources"]:
         text += f"; reward source {', '.join(cause['reward_sources'])} (native reward function, unchanged)"
     return text
@@ -546,7 +667,7 @@ def correctness_source(name, state):
     return root, other
 
 
-def group_cells(name, profile, state, group_dir, warnings, correctness=None):
+def group_cells(name, profile, state, group_dir, warnings, correctness=None, target="dapo"):
     """All matrix cells of one group plus the copy-task summary.
 
     correctness: (run_root, summary_entry) when copy-task evidence comes from another run.
@@ -554,7 +675,8 @@ def group_cells(name, profile, state, group_dir, warnings, correctness=None):
     status = state.get("status", "NOT_RUN")
     blocked = status in BLOCKED_STATES
     reason = state.get("reason") or state.get("error") or f"group status {status}"
-    dapo = dataset_result(group_dir / "dapo", profile, warnings)
+    label = TARGETS[target]["short"]
+    dapo = dataset_result(group_dir / target, profile, warnings, label)
     fixed = read(group_dir / "fixed-rollout" / "verification.json")
     if correctness:
         copy_dir = correctness[0] / name
@@ -578,20 +700,23 @@ def group_cells(name, profile, state, group_dir, warnings, correctness=None):
 
     gated("fixed_consistency", lambda: fixed_result(fixed, state))
     uv = dapo["update_verification"]
-    gated("effective_steps", lambda: effective_steps(dapo, uv))
+    gated("effective_steps", lambda: effective_steps(dapo, uv, label))
     for key in ("compared_tokens", "mismatch_count", "mean_abs_diff", "max_abs_diff"):
         gated(key, lambda key=key: dapo["consistency"][key])
     for key in PERF_KEYS:
         gated(key, lambda key=key: dapo["perf"][key])
-    digest = rollout_digest(group_dir / "dapo" / "v0-generate" / "generated-batch.json")
-    gated("dapo_rollout_sha256", lambda: (digest[0][:16], None) if digest else (None, "dapo/v0-generate/generated-batch.json absent"))
+    digest = rollout_digest(group_dir / target / "v0-generate" / "generated-batch.json")
+    gated("dapo_rollout_sha256", lambda: (digest[0][:16], None) if digest else (None, f"{target}/v0-generate/generated-batch.json absent"))
+    gated("advantage_stats", lambda: advantage_cell(dapo))
+    gated("reward_per_step", lambda: reward_per_step_cell(dapo))
+    cells["cross_config"] = cell(None, "computed across groups (aggregate): needs at least two groups with generation evidence")
     if digest and not blocked:
         cells["dapo_rollout_sha256"].update(sha256=digest[0], samples=digest[1], tokens=digest[2])
     if dapo["attempted"] and not blocked:
         for key in dapo["marked"]:  # effective_steps keeps its plain "n/3": a refused update is never counted
-            cells[key].update(marker="\u2020", footnote=dapo["attempted"]["attempted_note"], cause=dapo["attempted"].get("attempted_cause"))
-    gated("target_workload", lambda: target_workload(dapo, uv, state))
-    gated("independent_verifier", lambda: verifier_status(dapo, uv, fixed))
+            cells[key].update(marker="†", footnote=dapo["attempted"]["attempted_note"], cause=dapo["attempted"].get("attempted_cause"))
+    gated("target_workload", lambda: target_workload(dapo, uv, state, label))
+    gated("independent_verifier", lambda: verifier_status(dapo, uv, fixed, label))
     copy_uv = copy["update_verification"]
     copy_cells = dict(
         fixed_weight=cells["fixed_consistency"]["value"] if copy_fixed is None else (BLOCKED if blocked else cell(*copy_fixed)["value"]),
@@ -613,7 +738,7 @@ def fixed_result(fixed, state):
     return None, "fixed-rollout/verification.json absent"
 
 
-def effective_steps(result, uv):
+def effective_steps(result, uv, label="DAPO"):
     if uv and uv.get("status") == PASS:
         return f"{uv['completed_updates']}/{UPDATES}", None
     ok = [r for r in result["used"] if r["fresh_status"] == PASS and r["fixed_status"] == PASS]
@@ -622,7 +747,7 @@ def effective_steps(result, uv):
         return f"{len(ok)}/{UPDATES}", f"update {a['update']} attempted but refused: {a['attempted_error']}"
     if result["records"]:
         return f"{len(ok)}/{UPDATES}", "update-verification.json not PASS; counting per-step fresh+fixed verifier PASS only"
-    return None, "no DAPO update recorded"
+    return None, f"no {label} update recorded"
 
 
 def update_state(result, uv):
@@ -631,15 +756,15 @@ def update_state(result, uv):
     return FAIL if result["records"] else NA
 
 
-def target_workload(result, uv, state):
+def target_workload(result, uv, state, label="DAPO"):
     if uv and uv.get("status") == PASS and uv.get("completed_updates") == UPDATES and len(result["used"]) == UPDATES:
         return PASS, None
     if state.get("target_load") == FAIL or uv or result["records"]:
-        return FAIL, state.get("target_error") or (uv or {}).get("error") or "DAPO trajectory did not complete 3 verified updates"
-    return None, "DAPO target workload not run"
+        return FAIL, state.get("target_error") or (uv or {}).get("error") or f"{label} trajectory did not complete 3 verified updates"
+    return None, f"{label} target workload not run"
 
 
-def verifier_status(result, uv, fixed):
+def verifier_status(result, uv, fixed, label="DAPO"):
     statuses = [(fixed or {}).get("status")]
     for r in result["used"]:
         statuses += [r["fresh_status"], r["fixed_status"]]
@@ -649,13 +774,27 @@ def verifier_status(result, uv, fixed):
     if not result["records"] and not fixed and not uv:
         return None, "no verification evidence"
     if not result["used"] and not uv and all(r.get("attempted_error") for r in result["records"]):
-        # Nothing to verify: the only DAPO update was refused before backward, so no verifier ran.
+        # Nothing to verify: the only target update was refused before backward, so no verifier ran.
         # BLOCKED here means "prerequisite missing" (no effective update), the group itself did run.
         return BLOCKED, (
-            f"no effective DAPO update to verify (update refused); fixed-weight verifier "
+            f"no effective {label} update to verify (update refused); fixed-weight verifier "
             f"{(fixed or {}).get('status', 'missing')}; copy-task verifier: see the Correctness table"
         )
     return FAIL, "some verification is missing or not PASS: " + ", ".join(str(s) for s in statuses)
+
+
+def is_smoke_run(root):
+    """True for a run whose target dataset is the diagnostic lccsmoke set (and that has no formal lcc/dapo evidence)."""
+    info = read(Path(root) / "target-only.json", {})
+    return info.get("target_dataset") == SMOKE_DATASET
+
+
+def matrix_target(chosen):
+    """'lcc' when any chosen group run holds formal lcc evidence (the run's target dataset), else 'dapo'."""
+    for g, (root, _) in chosen.items():
+        if (root / g / "lcc").is_dir():
+            return "lcc"
+    return "dapo"
 
 
 def pick_runs(run_roots, prefer=None):
@@ -666,6 +805,8 @@ def pick_runs(run_roots, prefer=None):
         summary = read(root / "summary.json")
         if summary is None:
             raise ValueError(f"{root}: summary.json missing")
+        if is_smoke_run(root):  # diagnostic feasibility run: never part of the formal matrix
+            continue
         policy = read(root / "resource-policy.json")
         names = set(policy["selected_groups"]) if policy and "selected_groups" in policy else {
             g for g, s in summary.items() if s.get("status") != "DEFERRED"
@@ -681,6 +822,9 @@ def pick_runs(run_roots, prefer=None):
     for g, found in candidates.items():
         if len(found) > 1:
             pick = [f for f in found if preferred and f[0] == preferred[0]]
+            if not pick and not preferred:  # the one run with formal lcc evidence supplies the target trajectory
+                pick = [f for f in found if (f[0] / g / "lcc").is_dir()]
+                pick = pick if len(pick) == 1 else []
             if not pick:
                 raise ValueError(f"group {g} selected in several runs ({', '.join(str(f[0]) for f in found)}); use --prefer RUN")
             found = pick
@@ -764,14 +908,329 @@ def dapo_prompt_rows(base):
         n += 1
 
 
-def evidence_notes(per_group):
+def truncation_rate(gen, profile):
+    """Fraction of samples that hit the response cap without EOS (reward_evidence.truncated, else length == max_tokens)."""
+    samples = gen["samples"]
+    cap = ((gen.get("request") or {}).get("max_tokens")) or profile["target_load"]["response_cap"]
+    flags = []
+    for s in samples:
+        evidence = s.get("reward_evidence")
+        if isinstance(evidence, dict) and "truncated" in evidence:
+            flags.append(bool(evidence["truncated"]))
+        else:
+            flags.append(len(s["response_ids"]) == cap)
+    return sum(flags) / len(flags)
+
+
+def reward_per_step_cell(result):
+    used = result["used"]
+    if not used:
+        return None, "no effective update recorded"
+    values = [r["metrics"]["reward"] for r in used]
+    if any(not isinstance(v, (int, float)) for v in values):
+        return None, "reward missing for an effective update (generated-batch.json absent)"
+    return " / ".join(f"{v:.6g}" for v in values) + f" (mean {mean(values):.6g})", None
+
+
+def trajectory_fingerprint(base):
+    """Per update k: training-batch response-token sha256 + rewards (v{k-1}-generate) and post-update weight digests."""
+    out, k = [], 1
+    while True:
+        path = Path(base) / f"v{k - 1}-generate" / "generated-batch.json"
+        digest = rollout_digest(path)
+        if not digest:
+            return out
+        samples = read(path)["samples"]
+        weights = {}
+        for i, receipt in enumerate(rank_files(Path(base) / f"update-{k}", "updated")):
+            digest_value = ((receipt or {}).get("checkpoint") or {}).get("state_digest")
+            if digest_value:
+                weights[str((receipt or {}).get("rank", i))] = digest_value
+        out.append(
+            dict(
+                update=k, tokens_sha256=digest[0], tokens=digest[2],
+                rewards=[s["raw_reward"] for s in samples], weights=weights or None,
+            )  # fmt: skip
+        )
+        k += 1
+
+
+def _short(field, value):
+    if field == "tokens_sha256":
+        return value[:16]
+    if field == "rewards":
+        return f"{len(value)} rewards, mean {mean(value):.6g}, first {value[0]:.6g}"
+    return {rank: digest[:16] for rank, digest in value.items()}
+
+
+def compare_pair(a, b, fields):
+    """(first divergence or None, number of compared fields) between two groups' per-update fingerprints."""
+    compared = 0
+    for ua, ub in zip(a, b):
+        for field in fields:
+            va, vb = ua.get(field), ub.get(field)
+            if va is None or vb is None:
+                continue
+            compared += 1
+            if va != vb:
+                return dict(update=ua["update"], field=field, reference=_short(field, va), other=_short(field, vb)), compared
+    return None, compared
+
+
+TRAJECTORY_FIELDS = ("tokens_sha256", "rewards", "weights")
+
+
+def cross_config(fps):
+    """Cross-configuration consistency from per-group fingerprints {group: trajectory_fingerprint}; all derived from evidence."""
+    present = [g for g in GROUPS if fps.get(g)]
+    if len(present) < 2:
+        return dict(status=NA, groups=present, reason="needs generation evidence of at least two groups")
+    ref = next((g for g in present if g != "N5"), present[0])
+    v0 = {g: fps[g][0] for g in present}
+    per_group_v0 = {
+        g: dict(
+            tokens_sha256=x["tokens_sha256"], tokens=x["tokens"], samples=len(x["rewards"]),
+            reward_mean=mean(x["rewards"]), reward_min=min(x["rewards"]), reward_max=max(x["rewards"]),
+        )  # fmt: skip
+        for g, x in v0.items()
+    }
+    v0_info = dict(
+        per_group=per_group_v0,
+        tokens_all_match=len({x["tokens_sha256"] for x in v0.values()}) == 1,
+        rewards_all_match=len({tuple(x["rewards"]) for x in v0.values()}) == 1,
+        reward_distribution_all_match=len({tuple(sorted(x["rewards"])) for x in v0.values()}) == 1,
+    )
+    core = [g for g in present if g != "N5"]
+    per_update = []
+    for k in range(1, max(len(fps[g]) for g in core) + 1):
+        row = dict(update=k)
+        for field in TRAJECTORY_FIELDS:
+            values = {g: json.dumps(fps[g][k - 1].get(field), sort_keys=True) for g in core if len(fps[g]) >= k and fps[g][k - 1].get(field) is not None}
+            row[field] = NA if len(values) < 2 else ("MATCH" if len(set(values.values())) == 1 else "DIVERGES")
+            row[field + "_groups"] = sorted(values)
+        per_update.append(row)
+    first, compared_total, pair_divergence = None, 0, {}
+    for g in core:
+        if g == ref:
+            continue
+        div, compared = compare_pair(fps[ref], fps[g], TRAJECTORY_FIELDS)
+        compared_total += compared
+        pair_divergence[g] = div
+        if div and (first is None or (div["update"], TRAJECTORY_FIELDS.index(div["field"])) < (first["update"], TRAJECTORY_FIELDS.index(first["field"]))):
+            first = dict(div, group=g, reference_group=ref)
+    trajectory = dict(
+        groups=core, reference=ref, per_update=per_update, compared_fields=compared_total, first_divergence=first,
+        status=NA if len(core) < 2 or not compared_total else ("DIVERGES" if first else "MATCH"),
+    )  # fmt: skip
+    n5 = None
+    if "N5" in present:
+        div, compared = compare_pair(fps[ref], fps["N5"], ("tokens_sha256", "rewards"))
+        n5 = dict(
+            reference=ref, compared_fields=compared, first_divergence=div,
+            status=NA if not compared else ("DIVERGES" if div else "MATCH"),
+            weight_digests={str(f["update"]): f["weights"] for f in fps["N5"] if f.get("weights")},
+            note="N5 (Dense DP4 / EP4) weight digests are per-rank EP4 states and are not compared with the EP1 digests; "
+            "its train-vs-rollout bitwise parity at its own weight versions is in the matrix consistency rows.",
+        )  # fmt: skip
+    cells = {}
+    for g in present:
+        v_tok = "MATCH" if g == ref or per_group_v0[g]["tokens_sha256"] == per_group_v0[ref]["tokens_sha256"] else "MISMATCH"
+        v_rew = "MATCH" if g == ref or tuple(v0[g]["rewards"]) == tuple(v0[ref]["rewards"]) else "MISMATCH"
+        if g == ref:
+            cells[g] = "reference"
+        elif g == "N5":
+            tail = f"; trajectory vs {ref}: {n5['status']} (tokens/rewards only; separate)" if n5 else ""
+            cells[g] = f"v0 tokens {v_tok}, rewards {v_rew}{tail}"
+        else:
+            div = pair_divergence.get(g)
+            traj = "N/A" if not compare_pair(fps[ref], fps[g], TRAJECTORY_FIELDS)[1] else (
+                f"DIVERGES at update {div['update']} {div['field']}" if div else "MATCH")
+            cells[g] = f"v0 tokens {v_tok}, rewards {v_rew}, trajectory {traj}"
+    return dict(status="OK", reference=ref, groups=present, v0=v0_info, trajectory=trajectory, n5=n5, cells=cells)
+
+
+def compute_cross_config(chosen, target, cells):
+    """Fingerprint every non-blocked chosen group, run cross_config and set each group's `cross_config` cell."""
+    fps = {
+        g: trajectory_fingerprint(root / g / target)
+        for g, (root, state) in chosen.items()
+        if state.get("status", "NOT_RUN") not in BLOCKED_STATES
+    }
+    result = cross_config(fps)
+    for g in cells:
+        if result["status"] == "OK" and g in result["cells"]:
+            cells[g]["cross_config"] = cell(result["cells"][g])
+        elif g in fps and result["status"] != "OK":
+            cells[g]["cross_config"] = cell(None, result["reason"])
+    return result
+
+
+def cross_config_md(columns, cross):
+    lines = ["", "### Cross-config consistency", ""]
+    if cross["status"] != "OK":
+        return lines + [f"N/A: {cross['reason']}.", ""]
+    v0 = cross["v0"]
+    lines += [
+        "(a) v0 generation (same v0 weights, same sampling configuration): response-token sha256 over the concatenated response ids "
+        "(uint32 LE, sample order) and reward statistics per group.",
+        "",
+        "| Group | v0 response-token sha256 | Tokens | Samples | Reward mean | min | max |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for g in columns:
+        x = v0["per_group"].get(g)
+        lines.append(
+            f"| {g} | {x['tokens_sha256']} | {x['tokens']} | {x['samples']} | {fmt(x['reward_mean'])} | {fmt(x['reward_min'])} | {fmt(x['reward_max'])} |"
+            if x else f"| {g} |" + " N/A |" * 6
+        )
+    lines += [
+        "",
+        f"v0 response tokens identical across {', '.join(v0['per_group'])}: {'MATCH' if v0['tokens_all_match'] else 'MISMATCH'}; "
+        f"per-sample rewards identical: {'MATCH' if v0['rewards_all_match'] else 'MISMATCH'}; "
+        f"reward distributions (sorted) identical: {'MATCH' if v0['reward_distribution_all_match'] else 'MISMATCH'}.",
+        "",
+    ]
+    t = cross["trajectory"]
+    lines += [
+        f"(b) {', '.join(t['groups'])} (same Actor configuration; rollout expected bitwise identical to TP1): per update, "
+        "training-batch response tokens (v{k-1} generation), rewards and post-update weight digests "
+        "(updated-rank-*.json checkpoint.state_digest per rank).",
+        "",
+        "| Update | Response tokens | Rewards | Weight digests |",
+        "| --- | --- | --- | --- |",
+    ]
+    for row in t["per_update"]:
+        lines.append(f"| {row['update']} | {row['tokens_sha256']} | {row['rewards']} | {row['weights']} |")
+    if t["first_divergence"]:
+        d = t["first_divergence"]
+        lines += [
+            "",
+            f"Trajectory {t['status']}: first divergence at update {d['update']}, field {d['field']}: "
+            f"{d['reference_group']}={d['reference']} vs {d['group']}={d['other']}.",
+        ]
+    else:
+        lines += ["", f"Trajectory {t['status']} across {', '.join(t['groups'])} ({t['compared_fields']} field comparisons against {t['reference']})."]
+    n5 = cross.get("n5")
+    lines += ["", "(c) N5 (reported separately):"]
+    if n5:
+        lines.append(
+            f"- vs {n5['reference']}: tokens/rewards {n5['status']}"
+            + (f"; first divergence at update {n5['first_divergence']['update']}, field {n5['first_divergence']['field']}" if n5["first_divergence"] else "")
+            + f". {n5['note']}"
+        )
+    else:
+        lines.append("- N/A: N5 has no generation evidence in the supplied runs.")
+    return lines + [""]
+
+
+def lcc_sources(base):
+    """{update: request source dict} of the recorded lcc rollout requests (stops at the first absent one)."""
+    out, n = {}, 1
+    while True:
+        gen = read(Path(base) / f"v{n - 1}-generate" / "generated-batch.json")
+        source = ((gen or {}).get("request") or {}).get("source")
+        if not source:
+            return out
+        out[n] = source
+        n += 1
+
+
+def passage_rows_text(source):
+    """'passage 0: rows 1024-1027 (last partial)' per passage of one recorded request source."""
+    parts = []
+    for p in source.get("passages", []):
+        text = f"passage {p['passage']}: rows {row_ranges(p['source_rows'])}"
+        parts.append(text + (" (last row partial)" if p.get("partial_last_row") else ""))
+    return ", ".join(parts)
+
+
+LENGTH_THRESHOLDS = (2048, 4096, 8192)
+
+
+def percentile(values, q):
+    ordered = sorted(values)
+    return ordered[max(0, -(-len(ordered) * q // 100) - 1)]  # nearest rank
+
+
+def length_coverage(base):
+    """Prompt+response length distribution of the real generated training batches of one target trajectory."""
+    totals, prompts, responses, updates, n = [], [], [], 0, 1
+    while True:
+        gen = read(Path(base) / f"v{n - 1}-generate" / "generated-batch.json")
+        if not gen or not gen.get("samples"):
+            break
+        if any("prompt_ids" not in s for s in gen["samples"]):
+            return None
+        for s in gen["samples"]:
+            prompts.append(len(s["prompt_ids"]))
+            responses.append(len(s["response_ids"]))
+            totals.append(prompts[-1] + responses[-1])
+        updates += 1
+        n += 1
+    if not totals:
+        return None
+    return dict(
+        updates=updates, samples=len(totals), min_total=min(totals), mean_total=sum(totals) / len(totals),
+        p50_total=percentile(totals, 50), p90_total=percentile(totals, 90), max_total=max(totals),
+        max_prompt=max(prompts), max_response=max(responses),
+        above={str(t): sum(1 for x in totals if x > t) for t in LENGTH_THRESHOLDS},
+    )  # fmt: skip
+
+
+def fixed_suite_coverage(group_roots):
+    """Operator coverage of the independent fixed-weight audit suite: [(group, run_root)] -> rows with real lengths."""
+    rows, statuses, sha, suite = [], {}, None, None
+    for g, root in group_roots:
+        verification = read(Path(root) / g / "fixed-rollout" / "verification.json")
+        if not verification or not verification.get("rows"):
+            continue
+        statuses[g] = {r["id"]: r for r in verification["rows"]}
+        if not rows:
+            rows = [r["id"] for r in verification["rows"]]
+            sha = verification.get("input_suite_sha256")
+            path = Path(root).parent.parent / "evidence" / "fixed-input-suite.json"
+            if path.is_file() and sha256_of(path) == sha:
+                suite = {c["id"]: c for c in read(path)["samples"]}
+    if not rows:
+        return None
+    first = next(iter(statuses.values()))
+    out = []
+    for rid in rows:
+        case = (suite or {}).get(rid)
+        prompt = len(case["prompt_ids"]) if case else None
+        response = first[rid].get("expected_tokens")
+        out.append(
+            dict(
+                id=rid, prompt_tokens=prompt, response_tokens=response,
+                total_tokens=prompt + response if prompt is not None and response is not None else None,
+                status={g: s[rid]["status"] if rid in s else NA for g, s in statuses.items()},
+                mismatch={g: s[rid].get("mismatch_count") if rid in s else NA for g, s in statuses.items()},
+            )  # fmt: skip
+        )
+    return dict(
+        input_suite_sha256=sha,
+        lengths_source="evidence/fixed-input-suite.json (sha256 matches the verification)" if suite else "unavailable: suite file absent or hash differs",
+        rows=out,
+    )
+
+
+def gpu_note(columns):
+    targets = {p["id"]: p for p in profiles()}
+    return "Active GPUs per phase (profile): " + "; ".join(
+        f"{g} actor {targets[g]['actor']['gpus']} (PP/TP/EP {targets[g]['actor']['pp']}/{targets[g]['actor']['tp']}/{targets[g]['actor']['ep']}), "
+        f"rollout {targets[g]['rollout']['gpus']}"
+        for g in columns
+    ) + "; phases reuse the same physical GPUs sequentially, so per-active-GPU rates divide by the phase's own GPU count and per-8-GPU rates by 8."
+
+
+def evidence_notes(per_group, target="dapo"):
     """Notes derived from the retained evidence (never hardcoded per group).
 
     per_group: {group: dict(effective=n, attempted=update or None, prompt_rows={update: [rows]})} for run groups.
     """
     out = []
     if any(v["effective"] < UPDATES for v in per_group.values()):
-        text = "Achieved: DAPO effective updates " + ", ".join(f"{g} {v['effective']}/{UPDATES}" for g, v in per_group.items())
+        text = f"Achieved: {TARGETS[target]['short']} effective updates " + ", ".join(f"{g} {v['effective']}/{UPDATES}" for g, v in per_group.items())
         refused = {g: v["attempted"] for g, v in per_group.items() if v["attempted"]}
         if refused:
             text += (
@@ -780,6 +1239,19 @@ def evidence_notes(per_group):
                 + "; training-batch parity only, no post-update audit)"
             )
         out.append(text + ".")
+    if target == "lcc":
+        sources = {g: v["lcc_sources"] for g, v in per_group.items() if v.get("lcc_sources")}
+        if sources:
+
+            def render_lcc(by_update):
+                return "; ".join(f"update {n}: {passage_rows_text(s)}" for n, s in sorted(by_update.items()))
+
+            head = "LCC passage source (pinned DAPO-Math-17k parquet rows of the recorded rollout requests): "
+            if len({json.dumps(r, sort_keys=True) for r in sources.values()}) == 1:
+                out.append(head + render_lcc(next(iter(sources.values()))) + f" (identical in {', '.join(sources)}).")
+            else:
+                out.append(head + "; ".join(f"{g}: {render_lcc(r)}" for g, r in sources.items()) + ".")
+        return out
     selections = {g: v["prompt_rows"] for g, v in per_group.items() if v["prompt_rows"]}
     if selections:
 
@@ -798,8 +1270,8 @@ def evidence_notes(per_group):
     return out
 
 
-def notes(revision, evidence=()):
-    return [
+def notes(revision, evidence=(), target="dapo", columns=GROUPS, lcc=None):
+    common = [
         "Hardware: 1 node, 8x AMD Instinct MI300X.",
         "Model: DeepSeek V4, original layers 0-6.",
         "Framework: verl + RL-Kernel + vLLM.",
@@ -821,21 +1293,49 @@ def notes(revision, evidence=()):
         "so it is a lower bound of that sample's real rate.",
         "A dagger marks a value of an attempted but refused (non-effective) DAPO update: it is never averaged into effective-step "
         "means and never counted as an effective GRPO step.",
-    ] + list(evidence)
+    ]
+    if target != "dapo":
+        common = [retarget(n, target) for n in common if not n.startswith("Dataset:")]
+        sha = (lcc or {}).get("parquet_sha256")
+        lcc_notes = [
+            f"Target task: {LCC_TASK_NAME}, dataset key lcc: the policy must copy a passage of at most 1024 prompt tokens "
+            "(user message \"Copy the following text exactly, without any explanation:\" + passage). It is a verifiable "
+            "sequence-reproduction workload for validating the GRPO system, not a math or reasoning task.",
+            "Reward (deterministic, reference-based, no shaping): 1 - EditDistance(out_ids, target_ids) / max(len(out_ids), "
+            "len(target_ids), 1) over the generated TOKEN ids (one trailing EOS stripped, every other token incl. special "
+            "tokens kept); target_ids = tokenizer encoding of the passage (add_special_tokens=False); score in [0, 1]; "
+            "implemented in RL-Kernel examples/operators/dsv4_4l/long_context_copy.py (exact bit-parallel Levenshtein).",
+            f"Passage source: consecutive user-message texts of the pinned DAPO-Math-17k revision {revision} "
+            "(parquet rows from 1024 in file order, joined by a blank line, longest prefix within the 1024-token prompt, "
+            "text only, no math task is used)" + (f"; parquet sha256 {sha}" if sha else "") + "; per-passage source rows below.",
+            "Seven-layer rewards are chance-level: the model (original layers 0-6 only) has no language capability, so its "
+            "responses are not copies. This run validates the GRPO system (nonzero advantages, real gradients, updated "
+            "parameters), strict FP32 consistency and performance, not learning or task quality.",
+        ]
+        common = common[:3] + lcc_notes + common[3:]
+    common += [
+        "Units: times in seconds, throughput in tokens/second, token counts are logical response/compared tokens "
+        "(never multiplied by ranks or DP replicas); logprob differences in nats.",
+        gpu_note(columns),
+        "Aggregation: per-step values are means over the effective updates (3 per configuration); consistency token and mismatch "
+        "counts are cumulative sums over the update's training-batch parity and post-update audits (one rank's receipt); "
+        "Advantage Statistics: mean |A| and std are means over updates, nonzero/total are summed.",
+    ]
+    return common + list(evidence)
 
 
-def render_md(columns, cells, copy_cells, revision, evidence=()):
+def render_md(columns, cells, copy_cells, revision, evidence=(), target="dapo", lcc=None, coverage=None, cross=None):
     lines = [
         "### Seven-layer DeepSeek V4 — ROCm Performance & Consistency Matrix",
         "",
         "| Metric | " + " | ".join(columns) + " |",
         "| --- |" + " --- |" * len(columns),
     ]
-    for label, key, _ in ROWS:
+    for label, key, _ in rows_for(target):
         lines.append(f"| {label} | " + " | ".join(show(cells[g][key]) for g in columns) + " |")
     lines += ["", rollout_identity(cells, columns)["text"]]
     lines += [""] + footnotes(cells, columns)
-    lines += ["", "Notes:", ""] + [f"- {n}" for n in notes(revision, evidence)]
+    lines += ["", "Notes:", ""] + [f"- {n}" for n in notes(revision, evidence, target, columns, lcc)]
     lines += [
         "",
         "### Correctness (copy task)",
@@ -850,7 +1350,52 @@ def render_md(columns, cells, copy_cells, revision, evidence=()):
             f"| {g} | {fmt(c['fixed_weight'])} | {fmt(c['three_update'])} | {fmt(c['verified_updates'])} | "
             f"{fmt(k['compared_tokens'])} | {fmt(k['mismatch_count'])} | {fmt(k['max_abs_diff'])} |"
         )
+    lines += cross_config_md(columns, cross) if cross else []
+    lines += coverage_md(columns, coverage, target) if coverage else []
     return "\n".join(lines) + "\n"
+
+
+def coverage_md(columns, coverage, target):
+    """Long-context coverage: real generated training lengths, kept apart from the audit-suite operator coverage."""
+    lines = ["", "### Long-context coverage", ""]
+    lines += [
+        f"(a) Real generated training tokens of the {TARGETS[target]['short']} trajectory (prompt + response tokens per sample, "
+        "all recorded training batches):",
+        "",
+        "| Group | Updates | Samples | Min | Mean | p50 | p90 | Max total | Max prompt | Max response | > 2048 | > 4096 | > 8192 |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for g in columns:
+        c = (coverage.get("training") or {}).get(g)
+        if not c:
+            lines.append(f"| {g} |" + " N/A |" * 12)
+            continue
+        lines.append(
+            f"| {g} | {c['updates']} | {c['samples']} | {c['min_total']} | {c['mean_total']:.1f} | {c['p50_total']} | {c['p90_total']} | "
+            f"{c['max_total']} | {c['max_prompt']} | {c['max_response']} | "
+            + " | ".join(str(c["above"][str(t)]) for t in LENGTH_THRESHOLDS)
+            + " |"
+        )
+    lines += [
+        "",
+        "(b) Operator coverage by the independent fixed-weight long-sequence audit suite (fixed audit inputs; not generated "
+        "training tokens and never part of any throughput):",
+        "",
+    ]
+    suite = coverage.get("fixed_suite")
+    if not suite:
+        return lines + ["N/A: no fixed-rollout verification rows recorded.", ""]
+    names = list(suite["rows"][0]["status"]) if suite["rows"] else []
+    lines += [
+        "| Suite row | Prompt tokens | Response tokens | Total tokens | " + " | ".join(names) + " |",
+        "| --- | --- | --- | --- |" + " --- |" * len(names),
+    ]
+    for r in suite["rows"]:
+        lines.append(
+            f"| {r['id']} | {fmt(r['prompt_tokens'] if r['prompt_tokens'] is not None else NA)} | {fmt(r['response_tokens'] if r['response_tokens'] is not None else NA)} | "
+            f"{fmt(r['total_tokens'] if r['total_tokens'] is not None else NA)} | " + " | ".join(str(r["status"][g]) for g in names) + " |"
+        )
+    return lines + ["", f"Suite lengths: {suite['lengths_source']}.", ""]
 
 
 def aggregate(run_roots, output, runtime_lock, prefer=None):
@@ -864,6 +1409,8 @@ def aggregate(run_roots, output, runtime_lock, prefer=None):
     targets = {p["id"]: p for p in profiles()}
     warnings, cells, copy_cells, groups = [], {}, {}, {}
     index, provenance_runs, correctness_runs, per_group = {}, {}, {}, {}
+    target = matrix_target(chosen)
+    training_cov = {}
     for g in GROUPS:
         if g in chosen:
             root, state = chosen[g]
@@ -872,11 +1419,12 @@ def aggregate(run_roots, output, runtime_lock, prefer=None):
             root, gdir = None, Path("/nonexistent-run-root") / g
             state = dict(status="BLOCKED", reason="group not selected by any supplied run")
         source = correctness_source(g, state) if root else None
-        cells[g], copy_cells[g], dapo, copy = group_cells(g, targets[g], state, gdir, warnings, source)
+        cells[g], copy_cells[g], dapo, copy = group_cells(g, targets[g], state, gdir, warnings, source, target)
         copy_root = source[0] if source else root
         groups[g] = dict(
             run=str(root) if root else None,
             summary=state,
+            target_dataset=target,
             dapo_steps=len(dapo["records"]),
             copy_steps=len(copy["records"]),
             copy_task=copy_cells[g],
@@ -889,7 +1437,8 @@ def aggregate(run_roots, output, runtime_lock, prefer=None):
         )
         if root is None:
             continue
-        for dataset, result, owner in (("dapo", dapo, root), ("copy", copy, copy_root)):
+        extra = []
+        for dataset, result, owner in ((target, dapo, root), ("copy", copy, copy_root), *extra):
             if result["records"]:
                 write_json(
                     output / f"steps-{g}-{dataset}.json",
@@ -923,20 +1472,40 @@ def aggregate(run_roots, output, runtime_lock, prefer=None):
             per_group[g] = dict(
                 effective=len(dapo["used"]),
                 attempted=dapo["attempted"]["update"] if dapo["attempted"] else None,
-                prompt_rows=dapo_prompt_rows(gdir / "dapo"),
+                prompt_rows=dapo_prompt_rows(gdir / "dapo") if target == "dapo" else {},
+                lcc_sources=lcc_sources(gdir / "lcc") if target == "lcc" else {},
             )
+            training_cov[g] = length_coverage(gdir / target)
     run_index = {}
     for root in provenance_runs:
         shared = root / "common-fixed-actor"
         run_index[str(root)] = index_files(root, shared) if shared.exists() else []
     write_json(output / "evidence-index.json", dict(per_group=index, per_run_common=run_index))
     columns = GROUPS
-    evidence = evidence_notes(per_group)
-    (output / "matrix.md").write_text(render_md(columns, cells, copy_cells, revision, evidence), encoding="utf-8")
+    cross = compute_cross_config(chosen, target, cells)
+    evidence = evidence_notes(per_group, target)
+    pending = [g for g in GROUPS if g not in per_group]
+    if pending and per_group:
+        evidence.append(f"Not run in the supplied runs (columns BLOCKED): {', '.join(pending)}.")
+        eight = [g for g in pending if targets[g]["peak_physical_gpus"] == 8]
+        if eight:
+            evidence.append(
+                f"{', '.join(eight)} need all 8 GPUs (rollout TP8 / 8-GPU EP4 actor); they are never run on a smaller GPU pool "
+                "and TP8/EP4 is never emulated, so they stay pending until all 8 GPUs are free."
+            )
+    first_source = next((s for v in per_group.values() for s in v.get("lcc_sources", {}).values()), {})
+    lcc_info = dict(parquet_sha256=first_source.get("parquet_sha256"), source=first_source)
+    coverage = dict(
+        training={g: c for g, c in training_cov.items() if c},
+        fixed_suite=fixed_suite_coverage([(g, chosen[g][0]) for g in chosen if chosen[g][1].get("status") not in BLOCKED_STATES]),
+    )
+    (output / "matrix.md").write_text(
+        render_md(columns, cells, copy_cells, revision, evidence, target, lcc_info, coverage, cross), encoding="utf-8"
+    )
     with open(output / "matrix.csv", "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["Metric"] + columns)
-        for label, key, _ in ROWS:
+        for label, key, _ in rows_for(target):
             writer.writerow([label.strip("*")] + [show(cells[g][key]) for g in columns])
     write_json(
         output / "matrix.json",
@@ -944,23 +1513,30 @@ def aggregate(run_roots, output, runtime_lock, prefer=None):
             title="Seven-layer DeepSeek V4 — ROCm Performance & Consistency Matrix",
             columns=columns,
             dataset_revision=revision,
-            notes=notes(revision, evidence),
+            notes=notes(revision, evidence, target, columns, lcc_info),
+            target_dataset=target,
+            target_task=LCC_TASK_NAME if target == "lcc" else "DAPO-Math-17k",
             rows=[
                 dict(metric=label.strip("*"), key=key, definition=definition, cells={g: cells[g][key] for g in columns})
-                for label, key, definition in ROWS
+                for label, key, definition in rows_for(target)
             ],
             groups=groups,
-            dapo_rollout_identity=rollout_identity(cells, columns),
+            long_context_coverage=coverage,
+            cross_config=cross,
+            dapo_rollout_identity=rollout_identity(cells, columns, TARGETS[target]["short"]),
             footnotes=footnotes(cells, columns),
             copy_task={g: copy_cells[g] for g in columns},
             warnings=warnings,
         ),
     )
-    write_json(output / "provenance.json", provenance(lock, runtime_lock, provenance_runs, chosen, output, run_roots, correctness_runs))
+    write_json(
+        output / "provenance.json",
+        provenance(lock, runtime_lock, provenance_runs, chosen, output, run_roots, correctness_runs, target),
+    )
     return dict(cells=cells, copy_cells=copy_cells, warnings=warnings)
 
 
-def provenance(lock, runtime_lock, runs, chosen, output, run_roots, correctness_runs=None):
+def provenance(lock, runtime_lock, runs, chosen, output, run_roots, correctness_runs=None, target="dapo"):
     runs_out, repro = [], []
     for root, names in runs.items():
         policy = read(root / "resource-policy.json", {})
@@ -983,7 +1559,7 @@ def provenance(lock, runtime_lock, runs, chosen, output, run_roots, correctness_
             f"--groups {' '.join(policy.get('selected_groups', names))} --runtime-lock {runtime_lock} "
             f"--health-receipt {root / 'health-receipt.json'}"
             + (f" --resource-policy {work}/<shared-policy.json>" if (root / "resource-policy-lock.json").exists() else "")
-            + (f" --target-only --correctness-run {read(root / 'target-only.json', {}).get('correctness_run')}" if (root / "target-only.json").exists() else "")
+            + (f" --target-only --correctness-run {read(root / 'target-only.json', {}).get('correctness_run')} --target-dataset {read(root / 'target-only.json', {}).get('target_dataset', 'dapo')}" if (root / "target-only.json").exists() else "")
         )
     for root, names in (correctness_runs or {}).items():
         runs_out.append(
@@ -1013,6 +1589,8 @@ def provenance(lock, runtime_lock, runs, chosen, output, run_roots, correctness_
             g: dict(
                 fixed_weight_row=str(r),
                 dapo_target=str(r),
+                target_dataset=target,
+                target_run=str(r),
                 copy_correctness=(s.get("correctness_from") or {}).get("run_root", str(r)),
                 correctness_from=s.get("correctness_from"),
                 resume=s.get("resume"),

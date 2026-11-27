@@ -18,7 +18,7 @@ import report_data as rd  # noqa: E402
 
 COLORS = {"N1": "#0072B2", "N2": "#E69F00", "N3": "#009E73", "N4": "#CC79A7", "N5": "#D55E00"}  # Okabe-Ito
 DPI = 200  # high-DPI PNGs
-STYLE = {"copy": "--", "dapo": "-"}
+STYLE = {"copy": "--", "dapo": "-", "lcc": "-"}
 STAGES = [
     ("rollout_seconds", "Rollout generation"),
     ("rollout_setup_sync_seconds", "Rollout setup + weight sync"),
@@ -30,7 +30,7 @@ STAGES = [
 TABLE_KEYS = [
     "actor_topology", "rollout_tp", "fixed_consistency", "effective_steps", "mismatch_count", "mean_abs_diff",
     "rollout_seconds", "rollout_tok_per_active_gpu_s", "rollout_setup_sync_seconds", "offload_restore_seconds",
-    "actor_logprob_seconds", "actor_train_seconds", "e2e_seconds", "response_length", "reward", "policy_loss",
+    "actor_logprob_seconds", "actor_train_seconds", "e2e_seconds", "response_length", "reward", "advantage_stats", "policy_loss",
     "target_workload", "independent_verifier",
 ]  # fmt: skip
 
@@ -84,7 +84,7 @@ def save(plt, fig, out, name):
 
 
 def matrix_png(plt, groups, out):
-    ROWS, fmt = rd.agg.ROWS, rd.agg.fmt
+    ROWS = rd.agg.rows_for(rd.group_target(groups))
 
     labels = {key: label.strip("*") for label, key, _ in ROWS}
     cols = list(groups)
@@ -101,7 +101,8 @@ def matrix_png(plt, groups, out):
             cell.set_text_props(weight="bold")
         if c == 0:
             cell.set_text_props(ha="left")
-    ax.set_title("Seven-layer DeepSeek V4 - ROCm Performance & Consistency Matrix\n(DAPO target rows; N/A = no evidence)", fontsize=10)
+    short = rd.agg.TARGETS[rd.group_target(groups)]["short"]
+    ax.set_title(f"Seven-layer DeepSeek V4 - ROCm Performance & Consistency Matrix\n({short} target rows; N/A = no evidence)", fontsize=10)
     wrapped = "\n".join(textwrap.fill(n, 150) for n in notes)
     if wrapped:
         fig.text(0.02, 0.0, wrapped, fontsize=6, va="top", ha="left")
@@ -109,7 +110,7 @@ def matrix_png(plt, groups, out):
 
 
 def summary_png(plt, groups, rows, out):
-    tasks = [t for t in ("copy", "dapo") if any(r["task"] == t and r["effective"] for r in rows)]
+    tasks = [t for t in rd.target_tasks(groups) if any(r["task"] == t and r["effective"] for r in rows)]
     fig, axes = plt.subplots(1, max(len(tasks), 1), figsize=(6.5 * max(len(tasks), 1), 4.5), squeeze=False)
     shades = ["#4C78A8", "#F58518", "#54A24B", "#B279A2", "#9D755D", "#BAB0AC"]
     for ax, task in zip(axes[0], tasks):
@@ -128,7 +129,8 @@ def summary_png(plt, groups, rows, out):
     save(plt, fig, out, "performance-summary.png")
 
 
-def lines(ax, rows, groups, field, title, tasks=("copy", "dapo")):
+def lines(ax, rows, groups, field, title, tasks=None):
+    tasks = tasks or rd.target_tasks(groups)
     drawn = False
     for g in groups:
         for t in tasks:

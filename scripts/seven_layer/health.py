@@ -20,6 +20,7 @@ def check(actual, expected, name):
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("mode", choices=["single", "communication"])
+    ap.add_argument("--world-size", type=int, default=8, help="expected communication world size (default: the full eight-GPU node)")
     ap.add_argument("--output", type=Path, required=True)
     args = ap.parse_args()
     rank = int(os.environ.get("RANK", 0))
@@ -39,20 +40,20 @@ def main():
         else:
             dist.init_process_group("nccl", timeout=datetime.timedelta(seconds=60))
             world = dist.get_world_size()
-            if world != 8 or torch.cuda.device_count() != 8:
-                raise RuntimeError("actual eight-rank/eight-device communication required")
+            if world != args.world_size or torch.cuda.device_count() != args.world_size:
+                raise RuntimeError(f"actual {args.world_size}-rank/{args.world_size}-device communication required")
             for iteration in range(3):
                 original = torch.arange(1024, device="cuda", dtype=torch.float32)
                 value = original + rank
                 dist.all_reduce(value)
                 check(value, original * world + sum(range(world)), "RCCL all_reduce")
                 value = torch.full((16,), rank, dtype=torch.int64, device="cuda")
-                dist.broadcast(value, src=3)
-                check(value, torch.full_like(value, 3), "RCCL broadcast")
+                dist.broadcast(value, src=min(3, world - 1))
+                check(value, torch.full_like(value, min(3, world - 1)), "RCCL broadcast")
                 value = torch.full((world * 16,), rank + 1, dtype=torch.float32, device="cuda")
                 reduced = torch.empty(16, dtype=torch.float32, device="cuda")
                 dist.reduce_scatter_tensor(reduced, value)
-                check(reduced, torch.full_like(reduced, 36), "RCCL reduce_scatter")
+                check(reduced, torch.full_like(reduced, world * (world + 1) // 2), "RCCL reduce_scatter")
                 sent = torch.arange(world, dtype=torch.int64, device="cuda") + rank * world
                 received = torch.empty_like(sent)
                 dist.all_to_all_single(received, sent)

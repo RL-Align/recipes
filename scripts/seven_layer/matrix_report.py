@@ -48,7 +48,9 @@ def summarize(root):
         writer = csv.DictWriter(f, fieldnames=list(fixed_rows[0]))
         writer.writeheader()
         writer.writerows(fixed_rows)
-    for dataset in ["copy", "dapo"]:
+    # lcc/lccsmoke only when some group has that directory (default dapo-only runs keep their exact tables)
+    extra = [d for d in ("lcc", "lccsmoke") if any((root / p["id"] / d).is_dir() for p in profiles())]
+    for dataset in ["copy", "dapo", *extra]:
         rows = []
         for p in profiles():
             name = p["id"]

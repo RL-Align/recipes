@@ -70,7 +70,7 @@ wandb login --host {base_url}
 Project UI: https://forge.coreweave.com/wandb/{entity}/{project}. Run ids are stable (`dsv4-7l-N1` .. `dsv4-7l-N5`, `dsv4-7l-summary`), so
 re-syncing resumes the same run (sync each run once to avoid duplicated step rows).
 Entity and project were stored in each offline run; the env vars above only restate them. Panels are named
-`<task>/<section>/<name>` with task in fixed/copy/dapo and section in consistency, reward, loss, timing,
+`<task>/<section>/<name>` with task in fixed/copy/dapo/lcc (lcc = Long-Context Verifiable Sequence GRPO Benchmark, not math reasoning; with an lcc target each task is its own run and W&B group) and section in consistency, reward, loss, timing, advantage,
 throughput, response; the x axis is `<task>/step` (GRPO update index).
 """
 
@@ -149,7 +149,7 @@ def build(
             pieces = [(rr, None)]
             if c["correctness_from"]:
                 src = Path(c["correctness_from"])
-                pieces = [(rr, "dapo"), (rr, "fixed-rollout"), (src, "copy"), (src, "fixed-rollout")]
+                pieces = [(rr, c.get("target_dataset", "dapo")), (rr, "fixed-rollout"), (src, "copy"), (src, "fixed-rollout")]
             for owner, scope in pieces:
                 for p in verifier_files(owner, g, scope):
                     dest = root / "verifier" / owner.name / p.relative_to(owner)
@@ -166,7 +166,7 @@ def build(
                 shutil.copytree(wb, root / "wandb", symlinks=True)  # latest-run stays a link: no second copy
         else:
             warnings.append("wandb not installed: offline runs not included")
-        names = ids or [wr.run_id(g) for g in groups] + ["dsv4-7l-summary"]
+        names = ids or [p["id"] for p in wr.payloads(groups)] + ["dsv4-7l-summary"]
         (root / "SYNC.md").write_text(sync_md(names, entity, project, base_url), encoding="utf-8")
         hits = scan_secrets(root)
         if hits:

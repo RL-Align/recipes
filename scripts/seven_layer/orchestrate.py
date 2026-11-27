@@ -36,6 +36,7 @@ def main():
             args.resource_policy.resolve(),
             q_up_trace=args.q_up_trace_run.resolve() if args.q_up_trace_run else None,
             indexer_trace=args.indexer_trace_run.resolve() if args.indexer_trace_run else None,
+            gpus=args.gpus if sorted(args.gpus) != list(range(8)) else None,
         )
         info = json.loads(args.runtime_lock.read_text())
         run(

@@ -200,7 +200,10 @@ def compare_actor_scores(first, second):
 
 # Per-dataset phase wall-clock limit; DAPO-Math-17k phases legitimately run longer than copy-task ones.
 DEFAULT_PHASE_TIMEOUT_SECONDS = 7200
-PHASE_TIMEOUT_SECONDS = {"copy": 7200, "dapo": 8 * 3600, None: DEFAULT_PHASE_TIMEOUT_SECONDS}
+TARGET_DATASETS = ("dapo", "lcc", "lccsmoke")  # lccsmoke is a diagnostic feasibility set, never part of the formal matrix
+PHASE_TIMEOUT_SECONDS = {
+    "copy": 7200, "dapo": 8 * 3600, "lcc": 8 * 3600, "lccsmoke": DEFAULT_PHASE_TIMEOUT_SECONDS, None: DEFAULT_PHASE_TIMEOUT_SECONDS,
+}
 
 
 def launch(
@@ -769,15 +772,40 @@ def check_resume_run(resume_target, provenance):
     return root
 
 
+def check_health_receipt(health, image, gpus, profiles_to_run):
+    """Accept a health/RCCL receipt only for its exact image and a run pool inside the pool it qualified.
+
+    A receipt without `qualified_physical_gpus` is the original eight-GPU receipt (world size 8 = GPUs 0..7). A pool-scoped
+    receipt must have world size == its pool size, and cannot qualify a group whose phases need more GPUs than the pool.
+    """
+    qualified = health.get("qualified_physical_gpus")
+    if qualified is None:
+        qualified = list(range(8)) if health.get("communication_world_size") == 8 else []
+    if (
+        health["status"] != "PASS"
+        or health["image_id"] != image
+        or not qualified
+        or health["communication_world_size"] != len(qualified)
+    ):
+        raise ValueError("health/communication receipt does not qualify this exact runtime image")
+    if not set(gpus) <= set(qualified):
+        raise ValueError(f"selected GPUs {sorted(gpus)} are not inside the receipt's qualified pool {sorted(qualified)}")
+    too_big = [p["id"] for p in profiles_to_run if p["peak_physical_gpus"] > len(qualified)]
+    if too_big:
+        raise ValueError(f"{', '.join(too_big)} need more GPUs than the {len(qualified)}-GPU qualified pool; use an 8-GPU receipt")
+
+
 def run(
     work, image, gpus, groups, runtime_lock, shared_policy, health_receipt, fixed_actor=None,
-    *, target_only=False, correctness_run=None, resume_target=None,
+    *, target_only=False, correctness_run=None, resume_target=None, target_dataset="dapo",
 ):  # fmt: skip
     targets = {p["id"]: p for p in profiles()}
     if not groups or len(set(groups)) != len(groups) or set(groups) - set(targets):
         raise ValueError("select unique groups from N1..N5")
     if not gpus or len(set(gpus)) != len(gpus) or any(g not in range(8) for g in gpus):
         raise ValueError("select unique physical GPU ordinals in 0..7")
+    if target_dataset not in TARGET_DATASETS:
+        raise ValueError(f"target dataset must be one of {TARGET_DATASETS}")
     if target_only and not correctness_run:
         raise ValueError("--target-only requires --correctness-run")
     if correctness_run and not target_only:
@@ -809,12 +837,7 @@ def run(
         if not health_receipt:
             raise ValueError("single-GPU health and eight-GPU communication receipt required")
         health = json.loads(health_receipt.read_text())
-        if (
-            health["status"] != "PASS"
-            or health["image_id"] != image
-            or health["communication_world_size"] != 8
-        ):
-            raise ValueError("health/communication receipt does not qualify this exact runtime image")
+        check_health_receipt(health, image, gpus, primary)
         if shared_policy:
             policy = json.loads(shared_policy.read_text())
             import hashlib
@@ -838,7 +861,11 @@ def run(
         if target_only:
             write(
                 run_root / "target-only.json",
-                dict(correctness_run=str(Path(correctness_run).resolve()), resume_target=str(resume_root) if resume_root else None),
+                dict(
+                    correctness_run=str(Path(correctness_run).resolve()),
+                    resume_target=str(resume_root) if resume_root else None,
+                    target_dataset=target_dataset,
+                ),
             )
         for name in set(summary) - set(groups):
             summary[name].update(status="DEFERRED", reason="not selected for this run")
@@ -937,7 +964,7 @@ def run(
             try:
                 resume = {}
                 if resume_root:
-                    count, r_policy, r_checkpoint, r_receipts = resume_plan(resume_root / name / "dapo")
+                    count, r_policy, r_checkpoint, r_receipts = resume_plan(resume_root / name / target_dataset)
                     summary[name]["resume"] = dict(from_run=str(resume_root), completed_updates=count)
                     if count:
                         resume = dict(
@@ -946,9 +973,11 @@ def run(
                         write(run_root / "summary.json", summary)
                 target = training(
                     work, run_root, rows, image, profile,
-                    r_policy if resume else policies[name], "dapo", **resume,
+                    r_policy if resume else policies[name], target_dataset, **resume,
                 )  # fmt: skip
-                summary[name].update(target_load="PASS", target_updates=target["completed_updates"])
+                summary[name].update(
+                    target_load="PASS", target_updates=target["completed_updates"], target_dataset=target_dataset
+                )
                 if resume:
                     summary[name]["resume"]["links"] = target["resume_links"]
                 if target_only:
@@ -956,7 +985,7 @@ def run(
             except ResourceConflict:
                 raise
             except Exception as e:
-                summary[name].update(target_load="FAIL", target_error=str(e))
+                summary[name].update(target_load="FAIL", target_error=str(e), target_dataset=target_dataset)
                 if target_only:
                     summary[name]["status"] = "FAIL"
             write(run_root / "summary.json", summary)
@@ -984,7 +1013,8 @@ def main():
     ap.add_argument("--resource-policy", type=Path)
     ap.add_argument("--health-receipt", type=Path, required=True)
     ap.add_argument("--fixed-actor", type=Path)
-    ap.add_argument("--target-only", action="store_true", help="skip copy-task training; run fixed-weight + DAPO only")
+    ap.add_argument("--target-only", action="store_true", help="skip copy-task training; run fixed-weight + the target dataset only")
+    ap.add_argument("--target-dataset", choices=TARGET_DATASETS, default="dapo", help="target workload; output goes to <group>/<dataset>/ (lccsmoke is diagnostic only)")
     ap.add_argument("--correctness-run", type=Path, help="run root whose summary shows CORRECTNESS_PASS (needs --target-only)")
     ap.add_argument("--resume-target", type=Path, help="earlier target-only run root to continue DAPO from (needs --target-only)")
     args = ap.parse_args()
@@ -1004,6 +1034,7 @@ def main():
         target_only=args.target_only,
         correctness_run=args.correctness_run,
         resume_target=args.resume_target,
+        target_dataset=args.target_dataset,
     )
 
 

@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import aggregate_matrix as agg  # noqa: E402
 from matrix import profiles  # noqa: E402
 
-TASKS = ["fixed", "copy", "dapo"]
+TASKS = ["fixed", "copy", "dapo", "lcc"]  # lcc: Long-Context Verifiable Sequence GRPO Benchmark (formal target)
 # Row field -> metric key of aggregate_matrix.step_record (same definitions as the matrix rows).
 FROM_METRICS = {
     "reward": "reward",
@@ -29,6 +29,7 @@ FROM_METRICS = {
     "total_train_seconds": "total_train_seconds",
     "e2e_seconds": "e2e_seconds",
     "response_length": "response_length",
+    "truncation_rate": "truncation_rate",
     "rollout_tok_per_active_gpu_s": "rollout_tok_per_active_gpu_s",
     "rollout_tok_per_8gpu_s": "rollout_tok_per_8gpu_s",
     "longest_sample_tok_s": "longest_sample_tok_s",
@@ -39,6 +40,7 @@ FIELDS = [
     "mismatch_count", "compared_count", "mean_abs_diff", "max_abs_diff",
     "audit_fresh_mismatch", "audit_fixed_mismatch",
     "kl", "generation_seconds", "rollout_phase_seconds", "rollout_tok_s",
+    "advantage_mean_abs", "advantage_std", "advantage_nonzero", "advantage_samples",
     *FROM_METRICS,
 ]  # fmt: skip
 NUMERIC = [f for f in FIELDS if f not in ("group", "task", "effective")]
@@ -87,6 +89,14 @@ def step_row(group, task, record):
         row["rollout_phase_seconds"] = gen + sync  # = v{n-1}-generate/execution.json seconds
     row["kl"] = None
     why["kl"] = KL_REASON
+    adv = record.get("advantage")
+    if adv:
+        row.update(
+            advantage_mean_abs=adv["mean_abs"], advantage_std=adv["std"],
+            advantage_nonzero=adv["nonzero"], advantage_samples=adv["samples"],
+        )  # fmt: skip
+    for f in ("advantage_mean_abs", "advantage_std", "advantage_nonzero", "advantage_samples"):
+        why[f] = "update-{n}/reward-advantage-rank-0.json missing".replace("{n}", str(record["update"]))
     why.setdefault("rollout_tok_s", why.get("rollout_seconds"))
     why.setdefault("generation_seconds", why.get("rollout_seconds"))
     why.setdefault("rollout_phase_seconds", why.get("rollout_setup_sync_seconds") or why.get("rollout_seconds"))
@@ -167,8 +177,13 @@ def group_config(name, profile, root, state, source, lock_commit=None):
 
 
 def load_groups(run_roots, prefer=None, runtime_lock=None):
-    """Selected groups (N1..N5 order, only those a supplied run selected) with rows, cells and config."""
+    """Selected groups (N1..N5 order, only those a supplied run selected) with rows, cells and config.
+
+    The matrix target is lcc when any chosen group run holds formal lcc evidence (else dapo, as before); with an lcc target
+    DAPO evidence is not shown (out of scope for an lcc matrix); a dapo-only run set behaves as before.
+    """
     chosen = agg.pick_runs(run_roots, prefer)
+    target = agg.matrix_target(chosen)
     targets = {p["id"]: p for p in profiles()}
     groups, warnings = {}, []
     lock_commit = runtime_lock_commit(runtime_lock)
@@ -177,10 +192,11 @@ def load_groups(run_roots, prefer=None, runtime_lock=None):
             continue
         root, state = chosen[g]
         source = agg.correctness_source(g, state)
-        cells, copy_cells, dapo, copy = agg.group_cells(g, targets[g], state, root / g, warnings, source)
+        cells, copy_cells, dapo, copy = agg.group_cells(g, targets[g], state, root / g, warnings, source, target)
         copy_root = source[0] if source else root
+        results = [("copy", copy), (target, dapo)]
         rows, notes = [], []
-        for task, result in (("copy", copy), ("dapo", dapo)):
+        for task, result in results:
             if not result["records"]:
                 notes.append(f"{task}: no steps.json/updates recorded")
             rows += [step_row(g, task, r) for r in result["records"]]
@@ -192,16 +208,30 @@ def load_groups(run_roots, prefer=None, runtime_lock=None):
             rows.insert(0, fixed_row(g, fixed, str(fixed_dir)))
         else:
             notes.append("fixed: fixed-rollout/verification.json absent")
+        config = group_config(g, targets[g], root, state, source, lock_commit)
+        config.update(target_dataset=target)
         groups[g] = dict(
             name=g,
-            config=group_config(g, targets[g], root, state, source, lock_commit),
+            target=target,
+            config=config,
             rows=rows,
             cells=cells,
             copy_cells=copy_cells,
             notes=notes,
             fixed_source=str(fixed_dir) if fixed else None,
         )
+    agg.compute_cross_config(chosen, target, {g: v["cells"] for g, v in groups.items()})
     return groups, warnings
+
+
+def group_target(groups):
+    """Target dataset of the loaded groups ('lcc' when present, else 'dapo')."""
+    return next((v.get("target", "dapo") for v in groups.values()), "dapo")
+
+
+def target_tasks(groups):
+    """Task names of the target trajectories shown in the main curves: copy plus the matrix target."""
+    return ("copy", group_target(groups))
 
 
 def all_rows(groups):
@@ -211,14 +241,17 @@ def all_rows(groups):
 def matrix_table(groups):
     """(columns, rows) of the Performance & Consistency matrix: label + one value per selected group."""
     columns = list(groups)
-    rows = [[label.strip("*")] + [agg.show(groups[g]["cells"][key]) for g in columns] for label, key, _ in agg.ROWS]
+    rows = [
+        [label.strip("*")] + [agg.show(groups[g]["cells"][key]) for g in columns] for label, key, _ in agg.rows_for(group_target(groups))
+    ]
     return columns, rows
 
 
 def matrix_footnotes(groups):
     """Footnote lines under the matrix: attempted-step markers plus the cross-group rollout token identity."""
     cells = {g: v["cells"] for g, v in groups.items()}
-    return [agg.rollout_identity(cells, list(groups))["text"]] + agg.footnotes(cells, list(groups))
+    label = agg.TARGETS[group_target(groups)]["short"]
+    return [agg.rollout_identity(cells, list(groups), label)["text"]] + agg.footnotes(cells, list(groups))
 
 
 # Row field -> W&B/panel name `<task>/<section>/<name>` (sections: consistency, reward, loss, timing, throughput, response).
@@ -247,5 +280,10 @@ SECTIONS = {
     "longest_sample_tok_s": "throughput/longest_sample_tok_s",
     "actor_train_tok_s": "throughput/actor_train_tok_s",
     "response_length": "response/length_mean",
+    "truncation_rate": "response/truncation_rate",
     "response_tokens": "response/tokens",
+    "advantage_mean_abs": "advantage/mean_abs",
+    "advantage_std": "advantage/std",
+    "advantage_nonzero": "advantage/nonzero_count",
+    "advantage_samples": "advantage/samples",
 }  # generation_seconds duplicates rollout_seconds (rounds.csv only)

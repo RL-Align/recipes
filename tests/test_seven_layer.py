@@ -710,3 +710,216 @@ def test_aggregate_refuses_changed_correctness_run(tmp_path):
     build_group(trun, "N1")
     with pytest.raises(ValueError, match="changed"):
         agg.aggregate([trun], tmp_path / "out", lock_file(tmp_path))
+
+
+# ---- long-context copy (lcc / lccsmoke) request generation and target selection ----
+
+
+def lcc_fake_rows(count=200, width=20, first=1024):
+    return [(first + i, chr(97 + i % 26) * width) for i in range(count)]
+
+
+def test_build_passages_takes_the_longest_fitting_prefix_and_is_deterministic():
+    prep = load("prepare_requests")
+    fits = lambda text: len(text) <= 50  # noqa: E731
+    passages = prep.build_passages(lcc_fake_rows(), fits, count=5)
+    assert passages == prep.build_passages(lcc_fake_rows(), fits, count=5)
+    used = [r for p in passages for r in p["source_rows"]]
+    assert used == sorted(set(used)) and used[0] == 1024  # file order, rows never reused
+    for p in passages:
+        assert fits(p["text"]) and not p["text"].endswith(" ")
+        assert len(p["text"]) == 50  # the next character would not fit: longest prefix
+        assert p["partial_last_row"] is True and "\n\n" in p["text"]
+    with pytest.raises(ValueError, match="exhausted"):
+        prep.build_passages(lcc_fake_rows(count=3), fits, count=5)
+
+
+def lcc_requests(prep, dataset, passages=None):
+    passages = passages or prep.build_passages(lcc_fake_rows(), lambda t: len(t) <= 50)
+    return prep.lcc_requests(
+        passages, "f" * 64, 1, lambda text: list(range(len(text))), lambda text: [ord(c) for c in text], dataset
+    )
+
+
+def test_lcc_requests_shape_source_and_token_targets():
+    prep = load("prepare_requests")
+    files = lcc_requests(prep, "lcc")
+    assert sorted(files) == [f"lcc-step{k}.json" for k in (1, 2, 3, 4)]
+    first = files["lcc-step1.json"]
+    assert (first["dataset"], first["samples_per_prompt"], first["max_tokens"], first["prompt_cap"]) == ("lcc", 16, 7168, 1024)
+    assert len(first["prompts"]) == 8 and first["purpose"] == "optimizer update 1/3"
+    assert files["lcc-step4.json"]["purpose"].startswith("post-v3 audit only")
+    p = first["prompts"][0]
+    assert p["data_source"] == "rlk/long-context-copy" and p["extra_info"]["eos_token_id"] == 1
+    assert p["extra_info"]["target_ids"] == [ord(c) for c in p["ground_truth"]]  # encode(passage), no special tokens
+    assert len(p["prompt_ids"]) <= 1024
+    source = first["source"]
+    assert source["parquet_sha256"] == "f" * 64 and "Reward = 1 - token_edit_distance" in source["construction_rule"]
+    assert [s["passage"] for s in source["passages"]] == list(range(8))
+    assert source["passages"][0]["source_rows"] == p["extra_info"]["source_rows"]
+    # steps 2/3 take the next 8 passages, step 4 audits the first 8 again (like copy/dapo)
+    assert [q["group_id"] for q in files["lcc-step2.json"]["prompts"]] == [str(i) for i in range(8, 16)]
+    assert [q["group_id"] for q in files["lcc-step4.json"]["prompts"]] == [str(i) for i in range(8)]
+
+
+def test_lccsmoke_is_small_labelled_and_uses_the_same_passages_and_reward():
+    prep = load("prepare_requests")
+    passages = prep.build_passages(lcc_fake_rows(), lambda t: len(t) <= 50)
+    formal, smoke = lcc_requests(prep, "lcc", passages), lcc_requests(prep, "lccsmoke", passages)
+    s1 = smoke["lccsmoke-step1.json"]
+    assert (s1["samples_per_prompt"], s1["max_tokens"], len(s1["prompts"])) == (4, 2048, 2)
+    assert "DIAGNOSTIC" in s1["label"] and "never part of the formal matrix" in s1["label"]
+    assert s1["prompts"][0] == formal["lcc-step1.json"]["prompts"][0]
+    assert s1["source"]["dataset_key"] == "lccsmoke" and sorted(smoke) == [f"lccsmoke-step{k}.json" for k in (1, 2, 3, 4)]
+
+
+def test_add_to_lock_extends_without_touching_existing_files(tmp_path):
+    prep = load("prepare_requests")
+    out = tmp_path / "requests-N"
+    out.mkdir()
+    (out / "dapo-step1.json").write_text("{}\n")
+    original = dict(files={"dapo-step1.json": prep.sha(out / "dapo-step1.json")}, scope="orig")
+    (out / "requests.lock.json").write_text(json.dumps(original))
+    files = {**lcc_requests(prep, "lcc"), **lcc_requests(prep, "lccsmoke")}
+    lock = prep.add_to_lock(out, files)
+    assert lock["files"]["dapo-step1.json"] == original["files"]["dapo-step1.json"] and lock["scope"] == "orig"
+    assert set(lock["files"]) == {"dapo-step1.json", *files}
+    assert all(prep.sha(out / name) == digest for name, digest in lock["files"].items())
+    with pytest.raises(ValueError, match="never overwritten"):
+        prep.add_to_lock(out, files)
+    (out / "dapo-step1.json").write_text("changed\n")
+    with pytest.raises(ValueError, match="differs from requests.lock.json"):
+        prep.read_lock(out)
+
+
+def test_target_dataset_option_and_timeouts(monkeypatch, tmp_path):
+    execute = load_execute()
+    assert execute.TARGET_DATASETS == ("dapo", "lcc", "lccsmoke")
+    assert execute.PHASE_TIMEOUT_SECONDS["lcc"] == 28800 and execute.PHASE_TIMEOUT_SECONDS["lccsmoke"] == 7200
+    assert execute.PHASE_TIMEOUT_SECONDS["dapo"] == 28800  # unchanged
+    with pytest.raises(ValueError, match="target dataset"):
+        execute.run(tmp_path, "image", [0, 1], ["N1"], None, None, None, target_dataset="bogus")
+    seen = {}
+    monkeypatch.setattr(execute, "run", lambda *a, **kw: seen.update(kw))
+    base = ["x", "--work", str(tmp_path), "--image", "i", "--gpus", "4", "5", "--groups", "N1", "--runtime-lock", "l",
+            "--health-receipt", "h", "--target-only", "--correctness-run", "c"]  # fmt: skip
+    monkeypatch.setattr("sys.argv", base)
+    execute.main()
+    assert seen["target_dataset"] == "dapo"  # default: old behaviour unchanged
+    monkeypatch.setattr("sys.argv", base + ["--target-dataset", "lcc", "--resume-target", "r"])
+    execute.main()
+    assert seen["target_dataset"] == "lcc" and seen["resume_target"] == Path("r")
+    monkeypatch.setattr("sys.argv", base + ["--target-dataset", "nope"])
+    with pytest.raises(SystemExit):
+        execute.main()
+
+
+@pytest.mark.parametrize("dataset, timeout", [("lcc", 28800), ("lccsmoke", 7200), ("dapo", 28800)])
+def test_training_locates_requests_and_output_by_dataset(monkeypatch, tmp_path, dataset, timeout):
+    execute = load_execute()
+    calls = []
+
+    class Stop(Exception):
+        pass
+
+    def fake_launch(work, run, rows, image, profile, action, out, **kw):
+        calls.append((action, kw))
+        raise Stop
+
+    monkeypatch.setattr(execute, "launch", fake_launch)
+    profile = {p["id"]: p for p in execute.profiles()}["N1"]
+    run = tmp_path / "runs-N/r"
+    with pytest.raises(Stop):
+        execute.training(tmp_path, run, [], "img", profile, tmp_path / "policy.pt", dataset)
+    assert (run / "N1" / dataset).is_dir()
+    action, kw = calls[0]
+    assert action == "rollout-generate" and kw["batch"] == tmp_path / f"data/requests-N/{dataset}-step1.json"
+    assert kw["timeout_seconds"] == timeout
+
+
+def test_aggregate_ignores_lccsmoke_runs(tmp_path):
+    agg = load("aggregate_matrix")
+    smoke = make_run(tmp_path, "run-s", ["N1"])
+    dump(smoke / "target-only.json", dict(target_dataset="lccsmoke", correctness_run="c", resume_target=None))
+    assert agg.is_smoke_run(smoke) and not agg.is_smoke_run(full_run(tmp_path, "run-f"))
+    assert agg.pick_runs([smoke]) == {}
+    formal = full_run(tmp_path, "run-g")
+    assert list(agg.pick_runs([smoke, formal])) == ["N1"]  # smoke never competes for a group (no --prefer needed)
+
+
+# ---- pool-scoped health receipts (4 free GPUs) ----
+
+
+def pool_profiles(*names):
+    return [p for p in load("matrix").profiles() if p["id"] in names]
+
+
+def receipt(**kw):
+    base = dict(status="PASS", image_id="img", communication_world_size=8)
+    base.update(kw)
+    return base
+
+
+def test_full_receipt_keeps_working_as_before_with_and_without_the_new_field():
+    execute = load_execute()
+    legacy = receipt()  # original receipt: no qualified_physical_gpus
+    execute.check_health_receipt(legacy, "img", list(range(8)), pool_profiles("N4", "N5"))
+    execute.check_health_receipt(legacy, "img", [4, 5], pool_profiles("N1"))
+    execute.check_health_receipt(receipt(qualified_physical_gpus=list(range(8))), "img", [0, 1], pool_profiles("N1"))
+    for bad in (receipt(status="FAIL"), receipt(image_id="other"), receipt(communication_world_size=4)):
+        with pytest.raises(ValueError, match="does not qualify"):
+            execute.check_health_receipt(bad, "img", [0, 1], pool_profiles("N1"))
+
+
+def test_pool_receipt_qualifies_only_its_gpus_and_small_groups():
+    execute = load_execute()
+    pool = receipt(qualified_physical_gpus=[4, 5, 6, 7], communication_world_size=4)
+    execute.check_health_receipt(pool, "img", [4, 5], pool_profiles("N1"))
+    execute.check_health_receipt(pool, "img", [6, 7], pool_profiles("N2"))
+    execute.check_health_receipt(pool, "img", [4, 5, 6, 7], pool_profiles("N1", "N2", "N3"))
+    with pytest.raises(ValueError, match="not inside the receipt's qualified pool"):
+        execute.check_health_receipt(pool, "img", [3, 4], pool_profiles("N1"))
+    with pytest.raises(ValueError, match="not inside the receipt's qualified pool"):
+        execute.check_health_receipt(pool, "img", list(range(8)), pool_profiles("N1"))
+    for group in ("N4", "N5"):  # TP8 rollout / 8-GPU EP4 actor are never admitted on a 4-GPU receipt
+        with pytest.raises(ValueError, match="need more GPUs"):
+            execute.check_health_receipt(pool, "img", [4, 5, 6, 7], pool_profiles(group))
+    with pytest.raises(ValueError, match="does not qualify"):  # inconsistent receipt: world size must equal the pool
+        execute.check_health_receipt(receipt(qualified_physical_gpus=[4, 5, 6, 7]), "img", [4, 5], pool_profiles("N1"))
+
+
+def test_run_refuses_four_gpu_pool_for_n4_and_n5_before_any_phase(tmp_path):
+    execute = load_execute()
+    for group in ("N4", "N5"):
+        with pytest.raises(ValueError, match="physical pool too small"):
+            execute.run(tmp_path, "img", [4, 5, 6, 7], [group], tmp_path / "lock.json", None, tmp_path / "h.json")
+
+
+def test_qualify_pool_runs_per_card_and_pool_wide_communication(monkeypatch, tmp_path):
+    load_execute()
+    qualify = load("qualify")
+    calls, allocated = [], []
+    monkeypatch.setattr(qualify, "allocation", lambda gpus: allocated.append(list(gpus)) or [dict(physical_gpu=g, pci_bus_id=f"p{g}") for g in gpus])
+
+    def fake_phase(work, root, image, policy, rows, mode, **kw):
+        calls.append((mode, [r["physical_gpu"] for r in (kw.get("active") or rows)], kw.get("label")))
+        return dict(status="PASS")
+
+    monkeypatch.setattr(qualify, "phase", fake_phase)
+    lock, policy = tmp_path / "lock.json", tmp_path / "policy.json"
+    dump(lock, dict(image_id="img"))
+    dump(policy, {})
+    (tmp_path / "evidence").mkdir()
+    path = qualify.qualify(tmp_path, lock, policy, gpus=[7, 5, 4, 6])
+    result = json.loads(path.read_text())
+    assert allocated == [[4, 5, 6, 7]] and result["qualified_physical_gpus"] == [4, 5, 6, 7]
+    assert result["status"] == "PASS" and result["communication_world_size"] == 4 and "pool-scoped" in result["scope"]
+    assert calls == [("single", [g], f"single-gpu{g}") for g in (4, 5, 6, 7)] + [("communication", [4, 5, 6, 7], None)]
+    # the default pool is the full node and behaves exactly as before: one card-0 single check + 8-rank communication
+    calls.clear()
+    full = json.loads(qualify.qualify(tmp_path, lock, policy).read_text())
+    assert full["communication_world_size"] == 8 and full["qualified_physical_gpus"] == list(range(8))
+    assert calls == [("single", list(range(8)), None), ("communication", list(range(8)), None)]
+    for bad in ([4], [4, 4, 5], [4, 9]):
+        with pytest.raises(ValueError, match="qualification pool"):
+            qualify.qualify(tmp_path, lock, policy, gpus=bad)

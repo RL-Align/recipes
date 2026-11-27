@@ -3,7 +3,7 @@
 
 One run per group (stable id `dsv4-7l-<group>`, so a re-upload resumes/updates instead of duplicating) plus
 one summary run (`dsv4-7l-summary`) holding the full matrix wandb.Table and any PNGs from --images.
-Per-step values are logged under `fixed/`, `copy/` and `dapo/` with `<task>/step` (GRPO update index) as the
+Per-step values are logged under `fixed/`, `copy/`, `dapo/` and `lcc/` (Long-Context Verifiable Sequence GRPO Benchmark; with an lcc target every task is its own run and W&B group, job_type = task) with `<task>/step` (GRPO update index) as the
 x axis (panels: <task>/<section>/<name>; sections consistency, reward, loss, timing, throughput, response). Missing values are omitted, never filled; they are listed in each run's `missing` summary entry.
 Default mode is offline; sync later with `wandb sync <dir>/wandb/offline-run-*`.
 """
@@ -22,6 +22,12 @@ DEFAULT_ENTITY = "RL-Kernel"
 DEFAULT_PROJECT = "dsv4-rocm-single-node"
 WANDB_GROUP = "dsv4-7l-matrix"
 LOGGED = list(rd.SECTIONS)
+TASK_NAMES = {
+    "lcc": "Long-Context Verifiable Sequence GRPO Benchmark (not math reasoning)",
+    "copy": "Historical copy task (functional correctness)",
+    "dapo": "DAPO-Math-17k (numeric consistency only)",
+    "fixed": "Fixed-weight consistency",
+}
 
 
 def run_id(group):
@@ -47,27 +53,56 @@ def missing_list(group):
 
 
 def payloads(groups):
-    """Run payloads (pure data): name, config, per-step history, summary, matrix column."""
+    """Run payloads (pure data): name, config, per-step history, summary, matrix column.
+
+    Legacy (dapo target): one run per group holding every task under `<task>/` prefixes, as before. With an lcc target each task
+    is its own run (job_type = task, W&B group `dsv4-7l-<task>`), so the lcc, historical copy and fixed trajectories are never
+    mixed; the group run keeps only the matrix column and summary.
+    """
     runs = []
     for name, g in groups.items():
         cfg = g["config"]
+        target = g.get("target", "dapo")
         column = [
-            [label.strip("*"), rd.agg.show(g["cells"][key]), definition] for label, key, definition in rd.agg.ROWS
+            [label.strip("*"), rd.agg.show(g["cells"][key]), definition] for label, key, definition in rd.agg.rows_for(target)
         ]
         summary = {f"matrix/{key}": g["cells"][key]["value"] for _, key, _ in rd.agg.ROWS}
         summary["status"] = cfg["status"]
+        summary["target_dataset"] = target
         if g["cells"]["dapo_rollout_sha256"].get("sha256"):
-            summary["dapo/rollout_token_sha256"] = g["cells"]["dapo_rollout_sha256"]["sha256"]
+            summary[f"{target}/rollout_token_sha256"] = g["cells"]["dapo_rollout_sha256"]["sha256"]
         notes = [c["footnote"] for c in g["cells"].values() if c.get("footnote")]
         if notes:
-            summary["dapo/attempted_step_note"] = notes[0]
+            summary[f"{target}/attempted_step_note"] = notes[0]
             cause = next((c["cause"] for c in g["cells"].values() if c.get("cause")), None)
             if cause:
-                summary["dapo/attempted_step_cause"] = rd.agg.cause_text(cause)
+                summary[f"{target}/attempted_step_cause"] = rd.agg.cause_text(cause)
         summary["missing"] = missing_list(g)
+        if target == "lcc":
+            summary["task_name"] = TASK_NAMES["lcc"]
         runs.append(
-            dict(id=run_id(name), name=run_id(name), group=name, config=cfg, history=history(g["rows"]), summary=summary, column=column)
-        )
+            dict(
+                id=run_id(name), name=run_id(name), group=name, config=cfg,
+                history=[] if target == "lcc" else history(g["rows"]), summary=summary, column=column,
+                job_type="group", wandb_group=WANDB_GROUP, tags=["dsv4", "seven-layer", name], tasks=[] if target == "lcc" else rd.TASKS,
+            )
+        )  # fmt: skip
+        if target != "lcc":
+            continue
+        for task in rd.TASKS:
+            rows = [r for r in g["rows"] if r["task"] == task]
+            if not rows:
+                continue
+            task_summary = dict(task=task, task_name=TASK_NAMES[task], group=name, target_dataset=target)
+            task_summary["missing"] = [f"{task}/step{r['step']}/{f}: {why}" for r in rows for f, why in r["missing"].items()]
+            runs.append(
+                dict(
+                    id=f"{run_id(name)}-{task}", name=f"{name} {TASK_NAMES[task]}", group=name,
+                    config=dict(cfg, task=task, task_name=TASK_NAMES[task]),
+                    history=history(rows), summary=task_summary, column=None,
+                    job_type=task, wandb_group=f"dsv4-7l-{task}", tags=["dsv4", "seven-layer", name, task], tasks=[task],
+                )
+            )  # fmt: skip
     return runs
 
 
@@ -87,13 +122,15 @@ def upload(wandb, runs, summary_table, images, *, footnotes=(), mode, entity, pr
     done = []
     for payload in runs:
         run = wandb.init(
-            id=payload["id"], name=payload["name"], group=WANDB_GROUP, job_type="group", config=payload["config"],
-            tags=["dsv4", "seven-layer", payload["group"]], **common,
+            id=payload["id"], name=payload["name"], group=payload.get("wandb_group", WANDB_GROUP),
+            job_type=payload.get("job_type", "group"), config=payload["config"],
+            tags=payload.get("tags") or ["dsv4", "seven-layer", payload["group"]], **common,
         )  # fmt: skip
-        define_metrics(wandb, rd.TASKS)
+        define_metrics(wandb, payload.get("tasks", rd.TASKS))
         for item in payload["history"]:
             run.log(item)
-        run.log({"matrix_column": wandb.Table(columns=["Metric", payload["group"], "Definition"], data=payload["column"])})
+        if payload["column"] is not None:
+            run.log({"matrix_column": wandb.Table(columns=["Metric", payload["group"], "Definition"], data=payload["column"])})
         for key, value in payload["summary"].items():
             run.summary[key] = value
         run.finish()
