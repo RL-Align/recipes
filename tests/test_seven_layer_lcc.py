@@ -105,6 +105,7 @@ def test_lcc_matrix_rows_notes_and_no_dapo_section(tmp_path):
     assert "Units: times in seconds" in md and "Active GPUs per phase (profile): N1 actor 2" in md and "Aggregation:" in md
     assert "Not run in the supplied runs (columns BLOCKED): N3, N4, N5." in md
     assert "N4, N5 need all 8 GPUs (rollout TP8 / 8-GPU EP4 actor); they are never run on a smaller GPU pool" in md
+    assert "LCC rollout token identity" in md and "DAPO rollout token identity" not in md
     assert "### Correctness (copy task)" in md and "DAPO-Math-17k (numeric" not in md
     matrix = json.loads((tmp_path / "out/matrix.json").read_text())
     assert matrix["target_dataset"] == "lcc" and "dapo_numeric_consistency" not in matrix

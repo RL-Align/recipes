@@ -325,7 +325,7 @@ def rollout_digest(path):
 
 
 def rollout_identity(cells, columns, label="DAPO"):
-    """Cross-group DAPO rollout token identity from the per-group digests (computed, never assumed)."""
+    """Cross-group target-dataset rollout token identity from the per-group digests (computed, never assumed)."""
     columns = [g for g in columns if cells[g]["dapo_rollout_sha256"]["value"] != BLOCKED]  # groups that were run
     found = {g: cells[g]["dapo_rollout_sha256"] for g in columns if cells[g]["dapo_rollout_sha256"].get("sha256")}
     if not found:
@@ -1404,7 +1404,7 @@ def render_md(columns, cells, copy_cells, revision, evidence=(), target="dapo", 
     ]
     for label, key, _ in rows_for(target):
         lines.append(f"| {label} | " + " | ".join(show(cells[g][key]) for g in columns) + " |")
-    lines += ["", rollout_identity(cells, columns)["text"]]
+    lines += ["", rollout_identity(cells, columns, TARGETS[target]["short"])["text"]]
     lines += [""] + footnotes(cells, columns)
     lines += ["", "Notes:", ""] + [f"- {n}" for n in notes(revision, evidence, target, columns, lcc)]
     lines += [
