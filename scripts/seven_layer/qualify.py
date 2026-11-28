@@ -13,10 +13,10 @@ from uuid import uuid4
 from execute import allocation, container_base, mapped, observe, stop_owned_container, wait_idle, write
 
 
-def phase(work, root, image, policy, rows, mode, *, trace_run=None):
-    active = rows if mode == "communication" else rows[:1]
+def phase(work, root, image, policy, rows, mode, *, trace_run=None, active=None, label=None):
+    active = active if active is not None else (rows if mode == "communication" else rows[:1])
     gpus = [r["physical_gpu"] for r in active]
-    out = root / mode
+    out = root / (label or mode)
     out.mkdir()
     wait_idle(root, gpus)
     command = container_base(work, root, active, image, out)
@@ -32,7 +32,7 @@ def phase(work, root, image, policy, rows, mode, *, trace_run=None):
             "--node_rank=0",
             "--master_addr=127.0.0.1",
             f"--master_port={port}",
-            "--nproc_per_node=8",
+            f"--nproc_per_node={len(active)}",
         ]
     if mode in ("q-up-replay", "indexer-replay"):
         if trace_run is None:
@@ -51,6 +51,8 @@ def phase(work, root, image, policy, rows, mode, *, trace_run=None):
         ]
     else:
         command += ["/opt/recipes/scripts/seven_layer/health.py", mode, "--output", "/outputs"]
+        if mode == "communication" and len(active) != 8:
+            command += ["--world-size", str(len(active))]
     write(out / "command.json", command)
     cid = subprocess.check_output(command, text=True).strip()
     write(out / "container.json", dict(id=cid, mode=mode))
@@ -88,23 +90,53 @@ def phase(work, root, image, policy, rows, mode, *, trace_run=None):
     return dict(status="PASS", seconds=time.monotonic() - started, ranks=records)
 
 
-def qualify(work, runtime_lock, resource_policy, *, q_up_trace=None, indexer_trace=None):
+def validate_pool(gpus):
+    pool = sorted(gpus)
+    if len(pool) < 2 or len(set(pool)) != len(pool) or any(g not in range(8) for g in pool):
+        raise ValueError("qualification pool: select at least two unique physical GPU ordinals in 0..7")
+    return pool
+
+
+def qualify(work, runtime_lock, resource_policy, *, q_up_trace=None, indexer_trace=None, gpus=None):
+    """Health + RCCL receipt of a physical GPU pool (default: all eight, exactly as before).
+
+    A smaller pool runs the same single-card check on EVERY selected card (the full pool checks card 0 only, unchanged) and an
+    all_reduce/broadcast/reduce_scatter/all_to_all check across exactly the pool's ranks. Every phase is gated by wait_idle on the
+    pool's GPUs (idle, no foreign process). The receipt records qualified_physical_gpus; execute.py accepts it only for runs whose
+    selected GPUs are a subset of that pool.
+    """
+    pool = list(range(8)) if gpus is None else validate_pool(gpus)
+    full = pool == list(range(8))
     info = json.loads(runtime_lock.read_text())
     policy = json.loads(resource_policy.read_text())
     root = work / "evidence" / ("health-" + uuid4().hex[:12])
     root.mkdir()
     write(root / "resource-policy-lock.json", policy)
     image = info["image_id"]
-    rows = allocation(list(range(8)))
+    rows = allocation(pool)
     write(root / "allocation.json", rows)
     result = dict(
         status="PENDING",
         image_id=image,
         resource_policy_sha256=hashlib.sha256(resource_policy.read_bytes()).hexdigest(),
-        scope="single-card HIP health and actual eight-rank RCCL only; no model/EP4 acceptance",
+        qualified_physical_gpus=pool,
+        scope="single-card HIP health and actual eight-rank RCCL only; no model/EP4 acceptance"
+        if full
+        else f"pool-scoped: single-card HIP health on each of GPUs {pool} and actual {len(pool)}-rank RCCL across exactly that pool; "
+        "no model acceptance; cannot qualify groups needing more GPUs",
     )
     try:
-        result["single"] = phase(work, root, image, policy, rows, "single")
+        if full:
+            result["single"] = phase(work, root, image, policy, rows, "single")
+        else:
+            cards = {
+                str(row["physical_gpu"]): phase(
+                    work, root, image, policy, rows, "single", active=[row], label=f"single-gpu{row['physical_gpu']}"
+                )
+                for row in rows
+            }
+            result["single_cards"] = cards
+            result["single"] = cards[str(rows[0]["physical_gpu"])]
         result["communication"] = phase(work, root, image, policy, rows, "communication")
         if q_up_trace:
             result["q_up_diagnostic_replay"] = phase(
@@ -114,7 +146,7 @@ def qualify(work, runtime_lock, resource_policy, *, q_up_trace=None, indexer_tra
             result["indexer_diagnostic_replay"] = phase(
                 work, root, image, policy, rows, "indexer-replay", trace_run=indexer_trace
             )
-        result.update(status="PASS", communication_world_size=8)
+        result.update(status="PASS", communication_world_size=len(pool))
     except BaseException as error:
         result.update(status="FAIL", error=str(error))
         raise
@@ -129,8 +161,9 @@ def main():
     ap.add_argument("--work", type=Path, required=True)
     ap.add_argument("--runtime-lock", type=Path, required=True)
     ap.add_argument("--resource-policy", type=Path, required=True)
+    ap.add_argument("--gpus", nargs="+", type=int, help="qualify only this physical pool (default: all eight); the receipt then covers only these GPUs")
     args = ap.parse_args()
-    qualify(args.work, args.runtime_lock, args.resource_policy)
+    qualify(args.work, args.runtime_lock, args.resource_policy, gpus=args.gpus)
 
 
 if __name__ == "__main__":

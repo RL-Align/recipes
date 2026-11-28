@@ -43,7 +43,7 @@ def main():
         recipe_commit=recipe_commit,
         sources=pins,
         build_command=command,
-        scope="Experimental actor-TP1 real scoring and native three-update phase execution; GPU acceptance pending; N5 EP4 not implemented",
+        scope="Experimental actor-TP1 real scoring and native three-update phase execution; GPU acceptance pending; N5 EP4 experimental, GPU acceptance pending",
     )
     runtime = args.work / "runtime"
     runtime.mkdir(parents=True, exist_ok=True)

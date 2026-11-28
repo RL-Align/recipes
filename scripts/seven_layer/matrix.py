@@ -159,10 +159,12 @@ def prepare(work):
                 divisibility="CPU_CHECKED",
                 quantized_cut_alignment="NOT_GPU_VALIDATED",
                 sequence_parallel=p["actor"]["sequence_parallel"],
-                status="BLOCKED",
+                status="PENDING_GPU_QUALIFICATION" if p["id"] == "N5" else "BLOCKED",
                 blockers=[
                     "GPU0 root-owned process cannot be signalled by this account",
-                    "Rollout TP computation/resharding and N5 EP4 support still need qualification",
+                    "N5 EP4 implementation pending GPU qualification (needs all 8 GPUs after N1-N4)"
+                    if p["id"] == "N5"
+                    else "Rollout TP computation/resharding still needs qualification",
                     "Native phased GRPO implementation and recovery require actual GPU qualification",
                 ],
             )

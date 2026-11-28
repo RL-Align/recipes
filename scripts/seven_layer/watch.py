@@ -46,6 +46,10 @@ def selected_occupants(mapping, selected):
     return sorted(pid for pid, devices in occupants.items() if set(devices) & set(selected))
 
 
+def _alive(pid):
+    return os.path.exists(f"/proc/{pid}")
+
+
 def snapshot(selected=None):
     selected = list(range(8)) if selected is None else list(selected)
     if not selected or len(set(selected)) != len(selected) or any(g not in range(8) for g in selected):
@@ -68,6 +72,7 @@ def snapshot(selected=None):
     # those contexts; compare only actual device-associated processes.
     pids = selected_occupants(mapping, list(range(8)))
     summary_pids = []
+    transient_exited = set()
     for key, value in cards.get("system", {}).items():
         if not re.fullmatch(r"PID\d+", key):
             continue
@@ -75,9 +80,19 @@ def snapshot(selected=None):
         if len(fields) != 5:
             raise RuntimeError("ROCm process summary lacks GPU activity fields")
         if not fields[1].isdigit():
+            # A just-started process reports unknown fields; if it has already exited it cannot occupy a GPU.
+            if not _alive(int(key[3:])):
+                transient_exited.add(int(key[3:]))
+                continue
             raise RuntimeError(f"ROCm process GPU count temporarily unavailable: {key}={value!r}")
         if int(fields[1]) > 0:
             summary_pids.append(int(key[3:]))
+    # Drop one-sided PIDs that have already exited; a live one-sided PID still fails closed below.
+    for pid in set(pids) ^ set(summary_pids):
+        if not _alive(pid):
+            transient_exited.add(pid)
+    pids = [p for p in pids if p not in transient_exited]
+    summary_pids = [p for p in summary_pids if p not in transient_exited]
     if sorted(pids) != sorted(summary_pids):
         raise RuntimeError(
             f"ROCm active process APIs disagree: device_map={pids}, process_summary={summary_pids}"
@@ -106,6 +121,7 @@ def snapshot(selected=None):
         cards=cards,
         pid_gpu_mapping=mapping,
         processes=processes,
+        transient_exited_pids=sorted(transient_exited),
     )
 
 

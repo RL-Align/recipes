@@ -48,7 +48,9 @@ def summarize(root):
         writer = csv.DictWriter(f, fieldnames=list(fixed_rows[0]))
         writer.writeheader()
         writer.writerows(fixed_rows)
-    for dataset in ["copy", "dapo"]:
+    # lcc/lccsmoke only when some group has that directory (default dapo-only runs keep their exact tables)
+    extra = [d for d in ("lcc", "lccsmoke") if any((root / p["id"] / d).is_dir() for p in profiles())]
+    for dataset in ["copy", "dapo", *extra]:
         rows = []
         for p in profiles():
             name = p["id"]
@@ -111,7 +113,7 @@ def summarize(root):
                     actor_logprob_seconds=sum(v["actor_logprob_seconds"] for v in parity),
                     actor_train_seconds=train_seconds,
                     actor_train_tokens_per_second=tokens / train_seconds,
-                    actor_train_tokens_per_second_per_active_gpu=tokens / train_seconds / 2,
+                    actor_train_tokens_per_second_per_active_gpu=tokens / train_seconds / p["actor"]["gpus"],
                     actor_train_tokens_per_second_per_machine_gpu=tokens / train_seconds / 8,
                     response_tokens=tokens,
                     response_length=tokens / sum(len(g["samples"]) for g in generated),
